@@ -87,7 +87,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   // use msg to update parameters
   if(len<sizeof(LOOP_PARAM_MSG_TYPE))
     {
-    LPRINTF("incomplete message received.\n");
+    LPRINTF("incomplete message received.\n\r");
     return RPMSG_ERR_BUFF_SIZE;
     }
   memcpy(&gLoopParameters, data, sizeof(LOOP_PARAM_MSG_TYPE));
@@ -100,7 +100,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 static void rpmsg_service_unbind(struct rpmsg_endpoint *ept)
   {
   (void)ept;   // avoid warning on unused parameter
-  LPRINTF("RPMSG channel close requested\n");
+  LPRINTF("RPMSG channel close requested\n\r");
   shutdown_req = 1;
   }
 
@@ -109,7 +109,7 @@ static void rpmsg_service_unbind(struct rpmsg_endpoint *ept)
 static void AssertPrint(const char8 *FilenamePtr, s32 LineNumber)
   {
   LPRINTF("ASSERT: File Name: %s ", FilenamePtr);
-  LPRINTF("Line Number: %ld\n", LineNumber);
+  LPRINTF("Line Number: %ld\n\r", LineNumber);
   }
 
 
@@ -120,7 +120,7 @@ void LocalAbortHandler(void *callbackRef)
   (void)callbackRef;   // avoid warning on unused parameter
 
   // Data Abort exception handler
-  LPRINTF("DATA ABORT exception\n");
+  LPRINTF("DATA ABORT exception\n\r");
   }
 
 
@@ -131,7 +131,7 @@ void LocalUndefinedHandler(void *callbackRef)
   (void)callbackRef;   // avoid warning on unused parameter
 
   // Undefined Instruction exception handler
-  LPRINTF("UNDEFINED INSTRUCTION exception\n");
+  LPRINTF("UNDEFINED INSTRUCTION exception\n\r");
   }
 
 
@@ -147,7 +147,7 @@ void RegbankISR(void *callbackRef)
   // Regbank Interrupt Servicing Routine
   irq_cntr[REGBANK_IRQ_CNTR]++;
   // don't use printf in ISR! Xilinx standalone stdio is NOT thread safe
-  //printf("IRQ received from REGBANK (%lu)\n", irq_cntr[REGBANK_IRQ_CNTR]);
+  //printf("IRQ received from REGBANK (%lu)\n\r", irq_cntr[REGBANK_IRQ_CNTR]);
   // manually reset IRQ bit in regbank
   theval=*(REGBANK+0);
   theval&=0xFFFFFFFE;
@@ -164,7 +164,7 @@ void GpioISR(void *callbackRef)
   // AXI GPIO Interrupt Servicing Routine
   irq_cntr[GPIO_IRQ_CNTR]++;
   // don't use printf in ISR! Xilinx standalone stdio is NOT thread safe
-  //printf("IRQ received from AXI GPIO (%lu)\n", irq_cntr[GPIO_IRQ_CNTR]);
+  //printf("IRQ received from AXI GPIO (%lu)\n\r", irq_cntr[GPIO_IRQ_CNTR]);
 
   XGpio_InterruptClear(gpioPtr, GPIO_BUTTON_IRQ_MASK);
   }
@@ -187,7 +187,7 @@ static void TimerISR(void *callbackRef, u8 timer_num)
   irq_cntr[TIMER_IRQ_CNTR]++;
 
   // don't use printf in ISR! Xilinx standalone stdio is NOT thread safe
-  //printf("IRQ received from AXI timer (%lu)\n", ++irq_cntr[TIMER_IRQ_CNTR]);
+  //printf("IRQ received from AXI timer (%lu)\n\r", ++irq_cntr[TIMER_IRQ_CNTR]);
   }
 
 
@@ -196,7 +196,7 @@ void FiqHandler(void *cb)
   XTmrCtr *timerPtr = (XTmrCtr *)cb;
   u32 controlStatusReg, loadReg, cnts;
 
-  //printf("FIQ\n");
+  //printf("FIQ\n\r");
 
   // read current counter value to measure latency
   cnts=XTmrCtr_GetValue(timerPtr, TIMER_NUMBER);
@@ -280,7 +280,7 @@ int SetupIRQs(void)
     return XST_FAILURE;
   // set priority and endge sensitivity
   XScuGic_GetPriorityTriggerType(&interruptController, INTC_REGBANK_IRQ_ID, &irqPriority, &irqSensitivity);
-  //printf("REGBANK old priority=0x%02X; old sensitivity=0x%02X\n", irqPriority, irqSensitivity);
+  //printf("REGBANK old priority=0x%02X; old sensitivity=0x%02X\n\r", irqPriority, irqSensitivity);
   //irqPriority = 0;           // in step of 8; 0=highest; 248=lowest
   irqSensitivity=0x03;         // rising edge
   XScuGic_SetPriorityTriggerType(&interruptController, INTC_REGBANK_IRQ_ID, irqPriority, irqSensitivity);
@@ -297,7 +297,7 @@ int SetupIRQs(void)
     return XST_FAILURE;
   // set priority and endge sensitivity
   XScuGic_GetPriorityTriggerType(&interruptController, INTC_AXIGPIO_IRQ_ID, &irqPriority, &irqSensitivity);
-  //printf("AXI GPIO old priority=0x%02X; old sensitivity=0x%02X\n", irqPriority, irqSensitivity);
+  //printf("AXI GPIO old priority=0x%02X; old sensitivity=0x%02X\n\r", irqPriority, irqSensitivity);
   //irqPriority = 0;           // in step of 8; 0=highest; 248=lowest
   irqSensitivity=0x03;         // rising edge
   XScuGic_SetPriorityTriggerType(&interruptController, INTC_AXIGPIO_IRQ_ID, irqPriority, irqSensitivity);
@@ -339,7 +339,7 @@ int SetupIRQs(void)
 //
 //  // set priority and endge sensitivity
 //  XScuGic_GetPriorityTriggerType(&interruptController, INTC_TIMER_IRQ_ID, &irqPriority, &irqSensitivity);
-//  //printf("AXI timer old priority=0x%02X; old sensitivity=0x%02X\n", irqPriority, irqSensitivity);
+//  //printf("AXI timer old priority=0x%02X; old sensitivity=0x%02X\n\r", irqPriority, irqSensitivity);
 //  irqPriority = 0;           // in step of 8; 0=highest; 248=lowest
 //  irqSensitivity=0x03;         // rising edge
 //  XScuGic_SetPriorityTriggerType(&interruptController, INTC_TIMER_IRQ_ID, irqPriority, irqSensitivity);
@@ -442,7 +442,7 @@ int SetupAXItimer(void)
           (u32)(timerConfig->SysClockFreqHz/TIMER_FREQ_HZ));
   
   //loadreg=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
-  //LPRINTF("Timer period= %f s = %u counts\n", loadreg/(1.*timerConfig->SysClockFreqHz), loadreg);
+  //LPRINTF("Timer period= %f s = %u counts\n\r", loadreg/(1.*timerConfig->SysClockFreqHz), loadreg);
 
   gTimerIRQlatency=0;
   gTimerIRQoccurred=0;
@@ -496,11 +496,11 @@ static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index)
   status = remoteproc_set_rsc_table(&rproc_inst, rsc_table, rsc_size);
   if(status!=0) 
     {
-    LPRINTF("Failed to initialize remoteproc\n");
+    LPRINTF("Failed to initialize remoteproc\n\r");
     remoteproc_remove(&rproc_inst);
     return NULL;
     }
-  LPRINTF("Remoteproc successfully initialized\n");
+  LPRINTF("Remoteproc successfully initialized\n\r");
 
   return &rproc_inst;
   }
@@ -538,33 +538,33 @@ int SetupSystem(void **platformp)
   status = SetupIRQs();
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
-
+/*
   rproc = SetupRpmsg(0,0);
   if(!rproc)
     return XST_FAILURE;
-  
+
   *platformp = rproc;
 
   rpdev = create_rpmsg_vdev(rproc, 0, VIRTIO_DEV_DEVICE, NULL, NULL);
   if(!rpdev)
     {
-    LPERROR("Failed to create rpmsg virtio device\n");
+    LPERROR("Failed to create rpmsg virtio device\n\r");
     return XST_FAILURE;
     }
   
   // init RPMSG framework
-  LPRINTF("Try to create rpmsg endpoint\n");
+  LPRINTF("Try to create rpmsg endpoint\n\r");
   status = rpmsg_create_ept(&lept, rpdev, RPMSG_SERVICE_NAME,
                             RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
                             rpmsg_endpoint_cb,
                             rpmsg_service_unbind);
   if(status)
     {
-    LPERROR("Failed to create endpoint\n");
+    LPERROR("Failed to create endpoint\n\r");
     return XST_FAILURE;
     }
-  LPRINTF("Successfully created rpmsg endpoint\n");
-
+  LPRINTF("Successfully created rpmsg endpoint\n\r");
+*/
   return XST_SUCCESS;
   }
 
@@ -613,27 +613,27 @@ int main()
   gLoopParameters.param2=-37;
 
 
-  LPRINTF("\nR5 test application #5 : shared PL resources + IRQs + IPC (openamp)\n\n");
+  LPRINTF("\n\r*** R5 integrated controller ***\n\r\n\r");
 #ifdef ARMR5
-  LPRINTF("This is R5/baremetal side\n\n");
+  LPRINTF("This is R5/baremetal side\n\r\n\r");
 #else
-  LPRINTF("This is A53/linux side\n\n");
+  LPRINTF("This is A53/linux side\n\r\n\r");
 #endif
 
   LPRINTF("openamp lib version: %s (", openamp_version());
   LPRINTF("Major: %d, ", openamp_version_major());
   LPRINTF("Minor: %d, ", openamp_version_minor());
-  LPRINTF("Patch: %d)\n", openamp_version_patch());
+  LPRINTF("Patch: %d)\n\r", openamp_version_patch());
 
   LPRINTF("libmetal lib version: %s (", metal_ver());
   LPRINTF("Major: %d, ", metal_ver_major());
   LPRINTF("Minor: %d, ", metal_ver_minor());
-  LPRINTF("Patch: %d)\n", metal_ver_patch());
+  LPRINTF("Patch: %d)\n\r", metal_ver_patch());
 
   status = SetupSystem(&platform);
   if(status!=XST_SUCCESS)
     {
-    LPRINTF("ERROR Setting up System - aborting\n");
+    LPRINTF("ERROR Setting up System - aborting\n\r");
     return status;
     }
 
@@ -641,18 +641,24 @@ int main()
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
     {
-    LPRINTF("\nTimer   IRQs            : %lu\n",irq_cntr[TIMER_IRQ_CNTR]);
-    LPRINTF(  "GPIO    IRQs            : %lu\n",irq_cntr[GPIO_IRQ_CNTR]);
-    LPRINTF(  "RegBank IRQs            : %lu\n",irq_cntr[REGBANK_IRQ_CNTR]);
-    LPRINTF(  "RPMSG   IPIs            : %lu\n",irq_cntr[IPI_CNTR]);
-    LPRINTF(  "Loop Parameter 1 (float): %f\n",gLoopParameters.param1);
-    LPRINTF(  "Loop Parameter 2 (int)  : %d\n",gLoopParameters.param2);
-    LPRINTF(  "Timer IRQ latency (ns)  : %.0f\n",gTimerIRQlatency*1.e9);
+    //LPRINTF("\nTimer   IRQs            : %lu\n",irq_cntr[TIMER_IRQ_CNTR]);
+    LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
+    //LPRINTF(  "GPIO    IRQs            : %lu\n",irq_cntr[GPIO_IRQ_CNTR]);
+    LPRINTF(  "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
+    //LPRINTF(  "RegBank IRQs            : %lu\n",irq_cntr[REGBANK_IRQ_CNTR]);
+    LPRINTF(  "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
+    //LPRINTF(  "RPMSG   IPIs            : %lu\n",irq_cntr[IPI_CNTR]);
+    LPRINTF(  "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
+    //LPRINTF(  "Loop Parameter 1 (float): %f\n\r",gLoopParameters.param1);
+    LPRINTF(  "Loop Parameter 1 int(float): %d \n\r",(int)(gLoopParameters.param1));
+    LPRINTF(  "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
+    //LPRINTF(  "Timer IRQ latency (ns)  : %.0f\n",gTimerIRQlatency*1.e9);
+    LPRINTF(  "Timer IRQ latency (ns)  : %d\n\r",(int)(gTimerIRQlatency*1.e9));
     // can't use sscanf in the main loop, to avoid loosing RPMSGs,
     // so I print all the registers each time I get an IRQ,
     // which is at least once a second from the timer IRQ
-    for(thereg=0; thereg<16; thereg++)
-      LPRINTF(  "Regbank[%02u]             : 0x%08X\n",thereg, *(REGBANK+thereg));
+    //for(thereg=0; thereg<16; thereg++)
+    //  LPRINTF(  "Regbank[%02u]             : 0x%08X\n\r",thereg, *(REGBANK+thereg));
 
     _rproc_wait();
     // check whether we have a message from A53/linux
@@ -668,12 +674,12 @@ int main()
 
     }
 
-  LPRINTF("\nExiting\n");
+  LPRINTF("\n\rExiting\n\r");
 
   status = CleanupSystem(platform);
   if(status!=XST_SUCCESS)
     {
-    LPRINTF("ERROR Cleaning up System\n");
+    LPRINTF("ERROR Cleaning up System\n\r");
     // continue anyway, as we are shutting down
     //return status;
     }

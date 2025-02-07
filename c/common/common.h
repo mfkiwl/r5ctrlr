@@ -14,8 +14,15 @@
 
 // ##########  local defs  ###################
 
+#ifdef ARMR5
+// ########### R5 side
+#define LPRINTF(format, ...) xil_printf(format, ##__VA_ARGS__)
+#define LPERROR(format, ...) LPRINTF("ERROR: " format, ##__VA_ARGS__)
+#else
+// ########### linux side
 #define LPRINTF(format, ...) printf(format, ##__VA_ARGS__)
 #define LPERROR(format, ...) LPRINTF("ERROR: " format, ##__VA_ARGS__)
+#endif
 
 //---------- openamp stuff -------------------------
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"

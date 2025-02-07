@@ -57,10 +57,10 @@ static struct remoteproc *rproc_init(struct remoteproc *rproc,
   ret = metal_device_open(prproc->shm_bus_name, prproc->shm_name, &dev);
   if(ret)
     {
-    LPERROR("failed to open shm device: %d.\n", ret);
+    LPERROR("failed to open shm device: %d.\n\r", ret);
     goto err1;
     }
-  LPRINTF("Successfully open shm device.\n");
+  LPRINTF("Successfully open shm device.\n\r");
   prproc->shm_dev = dev;
   prproc->shm_io = metal_device_io_region(dev, 0);
   if(!prproc->shm_io)
@@ -70,28 +70,28 @@ static struct remoteproc *rproc_init(struct remoteproc *rproc,
   remoteproc_init_mem(&prproc->shm_mem, "shm", mem_pa, mem_pa,
                       metal_io_region_size(prproc->shm_io), prproc->shm_io);
   remoteproc_add_mem(rproc, &prproc->shm_mem);
-  LPRINTF("Successfully added shared memory\n");
+  LPRINTF("Successfully added shared memory\n\r");
 #endif
 
   // get IPI device
   ret = metal_device_open(prproc->ipi_bus_name, prproc->ipi_name, &dev);
   if(ret)
     {
-    LPRINTF("failed to open IPI device: %d\n", ret);
+    LPRINTF("failed to open IPI device: %d\n\r", ret);
     goto err2;
     }
   prproc->ipi_dev = dev;
   prproc->ipi_io = metal_device_io_region(dev, 0);
   if(!prproc->ipi_io)
     goto err3;
-  LPRINTF("Successfully probed IPI device\n");
+  LPRINTF("Successfully probed IPI device\n\r");
   atomic_store(&prproc->ipi_nokick, 1);
   // register interrupt handler and enable interrupt
   irq_vect = (uintptr_t)dev->irq_info;
   metal_irq_register(irq_vect, rproc_irq_handler, rproc);
   metal_irq_enable(irq_vect);
   metal_io_write32(prproc->ipi_io, IPI_IER_OFFSET, prproc->ipi_chn_mask);
-  LPRINTF("Successfully initialized Linux r5 remoteproc.\n");
+  LPRINTF("Successfully initialized Linux r5 remoteproc.\n\r");
   return rproc;
   
   err3:

@@ -38,27 +38,27 @@ struct rpmsg_device *create_rpmsg_vdev(void *platform, unsigned int vdev_index,
     goto err1;
   shbuf = metal_io_phys_to_virt(shbuf_io, SHARED_MEM_PA + SHARED_BUF_OFFSET);
 
-  LPRINTF("creating remoteproc virtio\n");
+  LPRINTF("creating remoteproc virtio\n\r");
   vdev = remoteproc_create_virtio(rproc, vdev_index, role, rst_cb);
   if(!vdev)
     {
-    LPRINTF("remoteproc_create_virtio failed\n");
+    LPRINTF("remoteproc_create_virtio failed\n\r");
     goto err1;
     }
 
-  LPRINTF("initializing rpmsg shared buffer pool\n");
+  LPRINTF("initializing rpmsg shared buffer pool\n\r");
   // only RPMsg virtio driver needs to initialize the shared buffers pool
   rpmsg_virtio_init_shm_pool(&shpool, shbuf, SHARED_BUF_SIZE);
 
-  LPRINTF("initializing rpmsg vdev\n");
+  LPRINTF("initializing rpmsg vdev\n\r");
   // RPMsg virtio device can set shared buffers pool argument to NULL
   ret = rpmsg_init_vdev(rpmsg_vdev, vdev, ns_bind_cb, shbuf_io, &shpool);
   if(ret)
     {
-    LPRINTF("failed rpmsg_init_vdev\r\n");
+    LPRINTF("failed rpmsg_init_vdev\n\r");
     goto err2;
     }
-  LPRINTF("initializing rpmsg vdev\r\n");
+  LPRINTF("initializing rpmsg vdev\n\r");
   return rpmsg_virtio_get_rpmsg_device(rpmsg_vdev);
 
   err2:
