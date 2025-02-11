@@ -538,7 +538,7 @@ int SetupSystem(void **platformp)
   status = SetupIRQs();
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
-/*
+
   rproc = SetupRpmsg(0,0);
   if(!rproc)
     return XST_FAILURE;
@@ -564,7 +564,7 @@ int SetupSystem(void **platformp)
     return XST_FAILURE;
     }
   LPRINTF("Successfully created rpmsg endpoint\n\r");
-*/
+
   return XST_SUCCESS;
   }
 
@@ -658,6 +658,7 @@ int main()
     // so I print all the registers each time I get an IRQ,
     // which is at least once a second from the timer IRQ
     //for(thereg=0; thereg<16; thereg++)
+    //  LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
     //  LPRINTF(  "Regbank[%02u]             : 0x%08X\n\r",thereg, *(REGBANK+thereg));
 
     _rproc_wait();

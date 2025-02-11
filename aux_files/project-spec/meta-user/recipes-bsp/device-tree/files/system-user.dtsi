@@ -1,6 +1,11 @@
 /include/ "system-conf.dtsi"
 / {
 
+/*
+serial@ff010000 {
+                status = "disabled";
+                };
+*/
 
 aliases {
                 /delete-property/ serial1;
@@ -42,6 +47,11 @@ axi {
 
 
 /delete-node/ &uart1;
+/*
+/delete-node/ &axi_gpio_0;
+/delete-node/ &axi_timer_0;
+/delete-node/ &regbank_0;
+*/
 
 &axi_gpio_0 {
             /delete-property/ interrupt-controller ;
@@ -49,16 +59,20 @@ axi {
             /delete-property/ interrupt-parent ;
             /delete-property/ interrupts ;
             xlnx,interrupt-present = <0x0>;
+            status = "disabled";
             };
 
 &axi_timer_0 {
              /delete-property/ interrupt-names ;
              /delete-property/ interrupt-parent ;
              /delete-property/ interrupts ;
+             status = "disabled";
              };
 
 &regbank_0   {
              /delete-property/ interrupt-names ;
              /delete-property/ interrupt-parent ;
              /delete-property/ interrupts ;
+             status = "disabled";
              };
+

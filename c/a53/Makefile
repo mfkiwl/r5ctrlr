@@ -1,7 +1,7 @@
 OBJ_LOCAL = linux_main.o 
 COMMON_DIR = ../common
 OBJ_COMMON = platform.o rproc.o rsc_table.o
-TARGET = a53app.elf
+TARGET = A53app.elf
 SYSROOT_PATH = /xilinxworks/ZCU102/v2024.2/r5ctrlr/r5ctrlr/sysroot/sysroots/cortexa72-cortexa53-xilinx-linux
 
 CC = /tools/Xilinx/Vitis/2024.2/gnu/aarch64/lin/aarch64-linux/bin/aarch64-linux-gnu-gcc

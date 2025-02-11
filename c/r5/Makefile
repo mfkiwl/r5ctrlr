@@ -1,7 +1,7 @@
 OBJ_LOCAL = r5_main.o 
 COMMON_DIR = ../common
 OBJ_COMMON = platform.o rproc.o rsc_table.o
-TARGET = r5app.elf
+TARGET = R5app.elf
 PLATFORM_PATH = /xilinxworks/ZCU102/v2024.2/r5ctrlr/r5ctrlr/hardware/vitis-workspace/ZCU102-r5ctrlr
 
 CC = /tools/Xilinx/Vitis/2024.2/gnu/armr5/lin/gcc-arm-none-eabi/bin/armr5-none-eabi-gcc
