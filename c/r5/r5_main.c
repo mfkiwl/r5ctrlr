@@ -650,15 +650,17 @@ int main()
     //LPRINTF(  "RPMSG   IPIs            : %lu\n",irq_cntr[IPI_CNTR]);
     LPRINTF(  "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
     //LPRINTF(  "Loop Parameter 1 (float): %f\n\r",gLoopParameters.param1);
-    LPRINTF(  "Loop Parameter 1 int(float): %d \n\r",(int)(gLoopParameters.param1));
+    LPRINTF(  "Loop Parameter 1 (float): %d.%03d \n\r",
+        (int)(gLoopParameters.param1),
+        DECIMALS(gLoopParameters.param1,3));
     LPRINTF(  "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
     //LPRINTF(  "Timer IRQ latency (ns)  : %.0f\n",gTimerIRQlatency*1.e9);
     LPRINTF(  "Timer IRQ latency (ns)  : %d\n\r",(int)(gTimerIRQlatency*1.e9));
     // can't use sscanf in the main loop, to avoid loosing RPMSGs,
     // so I print all the registers each time I get an IRQ,
     // which is at least once a second from the timer IRQ
-    //for(thereg=0; thereg<16; thereg++)
-    //  LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
+    for(thereg=0; thereg<16; thereg++)
+      LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
     //  LPRINTF(  "Regbank[%02u]             : 0x%08X\n\r",thereg, *(REGBANK+thereg));
 
     _rproc_wait();
