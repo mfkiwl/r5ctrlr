@@ -92,7 +92,7 @@ void LocalAbortHandler(void *callbackRef);
 void LocalUndefinedHandler(void *callbackRef);
 void RegbankISR(void *CallbackRef);
 void GpioISR(void *CallbackRef);
-static void TimerISR(void *callbackRef, u8 timer_num);
+//static void TimerISR(void *callbackRef, u8 timer_num);
 void FiqHandler(void *cb) __attribute__((section(".tcmb_text")));
 int SetupAXIGPIO(void);
 int SetupAXItimer(void);

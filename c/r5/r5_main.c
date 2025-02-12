@@ -68,7 +68,7 @@ XGpio theGpio;
 static XGpio_Config *gpioConfig;
 XTmrCtr theTimer;
 static XTmrCtr_Config *timerConfig;
-float gTimerIRQlatency;
+float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
 
 
@@ -171,7 +171,7 @@ void GpioISR(void *callbackRef)
 
 
 // -----------------------------------------------------------
-
+/*
 static void TimerISR(void *callbackRef, u8 timer_num)
   {
   XTmrCtr *timerPtr = (XTmrCtr *)callbackRef;
@@ -185,11 +185,18 @@ static void TimerISR(void *callbackRef, u8 timer_num)
 
   // increment number of received timer interrupts
   irq_cntr[TIMER_IRQ_CNTR]++;
+ 
+  // update max latency value only after initial transient
+  if(irq_cntr[TIMER_IRQ_CNTR]>1)
+    {
+    if(gTimerIRQlatency>gMaxLatency)
+      gMaxLatency=gTimerIRQlatency;
+    }
 
   // don't use printf in ISR! Xilinx standalone stdio is NOT thread safe
   //printf("IRQ received from AXI timer (%lu)\n\r", ++irq_cntr[TIMER_IRQ_CNTR]);
   }
-
+*/
 
 void FiqHandler(void *cb)
   {
@@ -210,6 +217,14 @@ void FiqHandler(void *cb)
 
   // increment number of received timer interrupts
   irq_cntr[TIMER_IRQ_CNTR]++;
+
+  // update max latency value only after initial transient
+  if(irq_cntr[TIMER_IRQ_CNTR]>1)
+    {
+    if(gTimerIRQlatency>gMaxLatency)
+      gMaxLatency=gTimerIRQlatency;
+    }
+
   // signal main loop that a new timer IRQ occurred
   gTimerIRQoccurred++;
   }
@@ -312,7 +327,7 @@ int SetupIRQs(void)
   // is physically connected to PS pin "nfiq0_lpd_rpu" (negated)
 
   // register ISR into standalone AXI timer driver
-  XTmrCtr_SetHandler(&theTimer, (XTmrCtr_Handler)TimerISR, (void *)&theTimer);
+  //XTmrCtr_SetHandler(&theTimer, (XTmrCtr_Handler)TimerISR, (void *)&theTimer);
 
   // disable GIC FIQ, so that we get FIQs by dedicated PS pin only
   reg = XScuGic_ReadReg(XPAR_SCUGIC_CPU_BASEADDR, 0);
@@ -445,6 +460,7 @@ int SetupAXItimer(void)
   //LPRINTF("Timer period= %f s = %u counts\n\r", loadreg/(1.*timerConfig->SysClockFreqHz), loadreg);
 
   gTimerIRQlatency=0;
+  gMaxLatency=0;
   gTimerIRQoccurred=0;
 
   return XST_SUCCESS;
@@ -641,27 +657,20 @@ int main()
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
     {
-    //LPRINTF("\nTimer   IRQs            : %lu\n",irq_cntr[TIMER_IRQ_CNTR]);
     LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
-    //LPRINTF(  "GPIO    IRQs            : %lu\n",irq_cntr[GPIO_IRQ_CNTR]);
-    LPRINTF(  "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
-    //LPRINTF(  "RegBank IRQs            : %lu\n",irq_cntr[REGBANK_IRQ_CNTR]);
-    LPRINTF(  "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
-    //LPRINTF(  "RPMSG   IPIs            : %lu\n",irq_cntr[IPI_CNTR]);
-    LPRINTF(  "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
-    //LPRINTF(  "Loop Parameter 1 (float): %f\n\r",gLoopParameters.param1);
-    LPRINTF(  "Loop Parameter 1 (float): %d.%03d \n\r",
+    LPRINTF(    "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
+    LPRINTF(    "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
+    LPRINTF(    "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
+    LPRINTF(    "Loop Parameter 1 (float): %d.%03d \n\r",
         (int)(gLoopParameters.param1),
         DECIMALS(gLoopParameters.param1,3));
-    LPRINTF(  "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
-    //LPRINTF(  "Timer IRQ latency (ns)  : %.0f\n",gTimerIRQlatency*1.e9);
-    LPRINTF(  "Timer IRQ latency (ns)  : %d\n\r",(int)(gTimerIRQlatency*1.e9));
+    LPRINTF(    "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
+    LPRINTF(    "Timer IRQ latency (ns)  : current= %d ; max= %d\n\r", (int)(gTimerIRQlatency*1.e9), (int)(gMaxLatency*1.e9));
     // can't use sscanf in the main loop, to avoid loosing RPMSGs,
     // so I print all the registers each time I get an IRQ,
     // which is at least once a second from the timer IRQ
     for(thereg=0; thereg<16; thereg++)
       LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
-    //  LPRINTF(  "Regbank[%02u]             : 0x%08X\n\r",thereg, *(REGBANK+thereg));
 
     _rproc_wait();
     // check whether we have a message from A53/linux
