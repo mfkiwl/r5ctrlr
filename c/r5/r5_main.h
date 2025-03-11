@@ -1,9 +1,13 @@
 //
-// R5 demo application
+// R5 integrated controller 
+// ZCU102 + ADI CN0585/CN0584
+//
 // IRQs from PL and 
 // interproc communications with A53/linux
 //
-// this is the R5 side
+//////////////////////////////////////////
+//
+// this is the R5 main side
 //
 
 #ifndef MAIN_H_
@@ -32,6 +36,7 @@
 #include <openamp/version.h>
 #include <metal/version.h>
 #include "rsc_table.h"
+#include "max7301.h"
 
 //---------- openamp stuff  ------------------------
 #define IPI_DEV_NAME         "poll_dev"

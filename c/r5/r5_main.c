@@ -1,18 +1,16 @@
 //
-// R5 demo application
+// R5 integrated controller 
+// ZCU102 + ADI CN0585/CN0584
+//
 // IRQs from PL and 
 // interproc communications with A53/linux
 //
-// this is the R5 side
+//////////////////////////////////////////
 //
-// features:
-//    - IRQ from register bank
-//    - IRQ from AXI GPIO
-//    - IRQ from AXI timer
-//    - readout register in register bank
-//    - get parameters from linux
+// this is the R5 main side
 //
-// latest rev: nov 5 2024
+//
+// latest rev: mar 6 2025
 //
 
 #include "r5_main.h"
@@ -555,6 +553,12 @@ int SetupSystem(void **platformp)
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
 
+  // setup analog card (ADI CN0585)
+  status = InitMAX7301();
+  if(status!=XST_SUCCESS)
+    return XST_FAILURE;
+
+  // setup OpenAMP
   rproc = SetupRpmsg(0,0);
   if(!rproc)
     return XST_FAILURE;
