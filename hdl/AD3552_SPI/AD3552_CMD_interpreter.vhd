@@ -78,10 +78,10 @@ begin
 
   with DAC_SPI_CLK_div select
     SPI_CEr <= '1'         when "00",
-            <= clk_cntr(0) when "01",
-            <= clk_cntr(1) when "10",
-            <= clk_cntr(2) when "11",
-            <= '1'         when others;
+               clk_cntr(0) when "01",
+               clk_cntr(1) when "10",
+               clk_cntr(2) when "11",
+               '1'         when others;
 
   clk_div_cntr: process(clk, reset)
   begin
@@ -100,13 +100,13 @@ begin
   if(rising_edge(clk)) then
     if(reset='1') then
       save_rd_word      <= (others => '0');
-      save_wr_word      <= (others => 0);
+      save_wr_word      <= (others => '0');
       DAC_rd_word_latch <= (others => '0');
-      SPI_wbyte_r       <= (others => 0);
+      SPI_wbyte_r       <= (others => '0');
       save_RW           <= '1';
       save_LAST         <= '0';
       save_BYTENUM      <= "00";
-      bytecnt           <= unsigned("00");
+      bytecnt           <= to_unsigned(0,bytecnt'length);
       errcode_r         <= NOERR;
       old_start         <= '0';
       old_busy          <= '0';
@@ -134,7 +134,7 @@ begin
             if(DAC_bytenum="00") then
               -- error: transaction of 0 bytes ends right away
               errcode_r      <= ERR_ZERO_BYTES;
-              save_wr_word   <= (others => 0);
+              save_wr_word   <= (others => '0');
               SPI_wbyte_r    <= SPI_wbyte_r;
               SPI_RW_r       <= '1';
               CSn_static     <= '1';
@@ -143,7 +143,7 @@ begin
             elsif(SPI_busy='1') then
               -- error: SPI engine busy
               errcode_r      <= ERR_SPI_BUSY;
-              save_wr_word   <= (others => 0);
+              save_wr_word   <= (others => '0');
               SPI_wbyte_r    <= SPI_wbyte_r;
               SPI_RW_r       <= '1';
               CSn_static     <= '1';
@@ -157,14 +157,14 @@ begin
                 CSn_static   <= '0';
                 SPI_wbyte_r  <= DAC_wr_word(7 downto 0);
                 RW_static    <= DAC_wr_word(7);
-                save_wr_word <= (others => 0);
+                save_wr_word <= (others => '0');
                 SPI_RW_r     <= '0';
                 SPI_start    <= '1';
                 sm_state     <= SHIFT_ADDR;
               else
                 -- if CS is low, last transaction is still pending; 
                 -- report an error and abort
-                save_wr_word <= (others => 0);
+                save_wr_word <= (others => '0');
                 errcode_r    <= ERR_OVERRUN;
                 SPI_wbyte_r  <= SPI_wbyte_r;
                 SPI_RW_r     <= SPI_RW_r;
@@ -177,10 +177,10 @@ begin
               --
               -- first of all check that RW is coherent 
               -- with the RW bit in previous address transaction
-              if(DAC_RW != RW_static) then
+              if(DAC_RW /= RW_static) then
                 -- RW is not coherent: abort
                 errcode_r      <= ERR_RW_MISMATCH;
-                save_wr_word   <= (others => 0);
+                save_wr_word   <= (others => '0');
                 SPI_wbyte_r    <= SPI_wbyte_r;
                 SPI_RW_r       <= '1';
                 CSn_static     <= '1';
@@ -202,7 +202,7 @@ begin
               end if;
             end if;
           else
-            save_wr_word     <= (others => 0);
+            save_wr_word     <= (others => '0');
             SPI_wbyte_r      <= SPI_wbyte_r;
             CSn_static       <= CSn_static;
             errcode_r        <= errcode_r;
@@ -256,9 +256,9 @@ begin
               -- rearrange readback word to have the first read byte as LSByte
               case(save_BYTENUM) is
                 when "01" =>
-                  DAC_rd_word_latch <= "0000_0000_0000_0000" & save_rd_word(23 downto 16);
+                  DAC_rd_word_latch <= "0000000000000000" & save_rd_word(23 downto 16);
                 when "10" =>
-                  DAC_rd_word_latch <= "0000_0000" & save_rd_word(23 downto 8);
+                  DAC_rd_word_latch <= "00000000" & save_rd_word(23 downto 8);
                 when "11" =>
                   DAC_rd_word_latch <= save_rd_word;
                 when others =>
@@ -291,7 +291,7 @@ begin
         ---------------------------
         when others =>
           save_rd_word      <= (others => '0');
-          save_wr_word      <= (others => 0);
+          save_wr_word      <= (others => '0');
           DAC_rd_word_latch <= DAC_rd_word_latch;
           SPI_wbyte_r       <= SPI_wbyte_r;
           busy              <= '0';
