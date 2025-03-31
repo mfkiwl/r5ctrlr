@@ -151,7 +151,8 @@ architecture arch_imp of AD3552_SPI is
 		  );
 	end component AD3552_SPI_engine;
 
-signal reset             : std_logic;
+signal DAC_CMD_reset     : std_logic;
+signal DAC_soft_reset     : std_logic;
 signal start_transaction : std_logic;
 signal busy              : std_logic;
 signal DAC_SPI_CLK_div   : std_logic_vector(1 downto 0);
@@ -175,7 +176,7 @@ signal SDIO_t            : std_logic_vector(3 downto 0);
 
 begin
 
-	reset <= not s00_axi_aresetn;
+	DAC_CMD_reset <= not s00_axi_aresetn or DAC_soft_reset;
 
 -- Instantiation of Axi Bus Interface S00_AXI
 AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
@@ -187,7 +188,7 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
 		-- lines to command interpreter
 		start_transaction => start_transaction,
 		busy              => busy,
-    DAC_soft_reset    => reset,
+    DAC_soft_reset    => DAC_soft_reset,
     DAC_hw_resetn     => DAC_HW_RESETn,
 		DAC_SPI_CLK_div   => DAC_SPI_CLK_div,
 		DAC_RW            => DAC_RW,
@@ -227,7 +228,7 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
     AD3552_CMD_interpreter_i : AD3552_CMD_interpreter
       port map
         (
-        reset             => reset,
+        reset             => DAC_CMD_reset,
         clk               => s00_axi_aclk,
         -- lines to the register bank
         start_transaction => start_transaction,

@@ -425,11 +425,7 @@ begin
 		  else
 		    -- bit 0 of slv_register1 is self resetting
 			  slv_reg1(C_S_AXI_DATA_WIDTH-1 downto 1) <= slv_reg1(C_S_AXI_DATA_WIDTH-1 downto 1);
-        if slv_reg1(0)='1' then
-	        slv_reg1(0) <= '0';
-	      else
-	        slv_reg1(0) <= slv_reg1(0);
-	      end if;
+			  slv_reg1(0) <= '0';
 
 		    -- the other registers are just latched
 			-- valerix todo: ?
