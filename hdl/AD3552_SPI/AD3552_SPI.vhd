@@ -19,10 +19,11 @@ entity AD3552_SPI is
 	);
 	port (
 		-- Users to add ports here
-		SPI_CSn           : out std_logic;
-		SPI_SCLK          : out std_logic;
-		XLATOR_DIR        : out std_logic; -- '1' means input to FPGA
-        SPI_SDIO          : inout std_logic_vector(3 downto 0);
+    SPI_CSn           : out std_logic;
+    SPI_SCLK          : out std_logic;
+    XLATOR_DIR        : out std_logic; -- '1' means input to FPGA
+    DAC_HW_RESETn     : out std_logic;
+    SPI_SDIO          : inout std_logic_vector(3 downto 0);
 
 		-- User ports ends
 		-- Do not modify the ports beyond this line
@@ -65,7 +66,8 @@ architecture arch_imp of AD3552_SPI is
 		-- lines to command interpreter
 		start_transaction : out std_logic;
 		busy              :  in std_logic;
-    DAC_reset         : out std_logic;
+    DAC_soft_reset    : out std_logic;
+    DAC_hw_resetn     : out std_logic;
 		DAC_SPI_CLK_div   : out std_logic_vector(1 downto 0);
 		DAC_RW            : out std_logic;
 		DAC_addr_data     : out std_logic;
@@ -185,7 +187,8 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
 		-- lines to command interpreter
 		start_transaction => start_transaction,
 		busy              => busy,
-    DAC_reset         => reset,
+    DAC_soft_reset    => reset,
+    DAC_hw_resetn     => DAC_HW_RESETn,
 		DAC_SPI_CLK_div   => DAC_SPI_CLK_div,
 		DAC_RW            => DAC_RW,
 		DAC_addr_data     => DAC_addr_data,

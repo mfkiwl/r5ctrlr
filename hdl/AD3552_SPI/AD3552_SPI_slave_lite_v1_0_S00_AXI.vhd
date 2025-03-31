@@ -19,17 +19,18 @@ entity AD3552_SPI_slave_lite_v1_0_S00_AXI is
 
     -- valerix
 		-- lines to command interpreter
-		start_transaction : out std_logic;
-		busy              :  in std_logic;
-    DAC_reset         : out std_logic;
-		DAC_SPI_CLK_div   : out std_logic_vector(1 downto 0);
-		DAC_RW            : out std_logic;
-		DAC_addr_data     : out std_logic;
-		DAC_LAST          : out std_logic;
-		DAC_bytenum       : out std_logic_vector(1 downto 0);
-		DAC_wr_word       : out std_logic_vector(23 downto 0);
-		DAC_rd_word       :  in std_logic_vector(23 downto 0);
-		errcode           :  in std_logic_vector(3 downto 0);
+    start_transaction : out std_logic;
+    busy              :  in std_logic;
+    DAC_soft_reset    : out std_logic;
+    DAC_hw_resetn     : out std_logic;
+    DAC_SPI_CLK_div   : out std_logic_vector(1 downto 0);
+    DAC_RW            : out std_logic;
+    DAC_addr_data     : out std_logic;
+    DAC_LAST          : out std_logic;
+    DAC_bytenum       : out std_logic_vector(1 downto 0);
+    DAC_wr_word       : out std_logic_vector(23 downto 0);
+    DAC_rd_word       :  in std_logic_vector(23 downto 0);
+    errcode           :  in std_logic_vector(3 downto 0);
 	
 		-- User ports ends
 		-- Do not modify the ports beyond this line
@@ -554,8 +555,9 @@ begin
     
     -- assign outputs from WRITE registers
 		start_transaction <= start_transaction_r;
-		DAC_SPI_CLK_div   <= slv_reg1(2 downto 1);
-    DAC_reset         <= slv_reg1(0);
+		DAC_SPI_CLK_div   <= slv_reg1(3 downto 2);
+    DAC_soft_reset    <= slv_reg1(0);
+    DAC_hw_resetn     <= not slv_reg1(1);
 		DAC_RW            <= slv_reg2(30);
 		DAC_addr_data     <= slv_reg2(29);
 		DAC_LAST          <= slv_reg2(28);
