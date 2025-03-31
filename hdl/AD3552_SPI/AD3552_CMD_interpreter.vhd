@@ -271,7 +271,7 @@ begin
               bytecnt      <= bytecnt -1;
               save_wr_word <= "00000000" & save_wr_word(15 downto 8);
               SPI_wbyte_r  <= save_wr_word(7 downto 0);
-              save_rd_word <= SPI_rbyte & save_rd_word(15 downto 8);
+              save_rd_word <= SPI_rbyte & save_rd_word(23 downto 8);
               SPI_start    <= '0';
               sm_state     <= SHIFT_BYTE;
             end if;
