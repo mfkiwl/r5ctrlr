@@ -497,9 +497,9 @@ begin
 	 S_AXI_RDATA <= 
    -- valerix: modify read parts of slv_reg0
    slv_reg0(31 downto 4) & errcode_r when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0000" ) else 
-	 -- valerix: modify read parts of slv_reg1
-	 DAC_transact_ended & slv_reg1(30 downto 24) & DAC_rd_word_r when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0001" ) else 
-	 slv_reg2 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0010" ) else 
+	 -- valerix: modify read parts of slv_reg2
+	 slv_reg1 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0001" ) else 
+	 DAC_transact_ended & slv_reg2(30 downto 24) & DAC_rd_word_r when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0010" ) else 
 	 slv_reg3 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0011" ) else 
 	 slv_reg4 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0100" ) else 
 	 slv_reg5 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "0101" ) else 

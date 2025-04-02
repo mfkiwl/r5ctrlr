@@ -27,6 +27,8 @@
 #define DAC_A_BADDR     XPAR_AD3552_SPI_0_BASEADDR
 //#define DAC_B_BADDR     XPAR_AD3552_SPI_1_BASEADDR
 
+#define MAX_READ_RETRIES     10
+
 // DAC register numbers
 #define STATUS_WORD     0
 #define CTRL_WORD       1
@@ -58,6 +60,7 @@
 #define DAC_1_BYTE_TRANSACTION       0x02000000
 #define DAC_2_BYTE_TRANSACTION       0x04000000
 #define DAC_3_BYTE_TRANSACTION       0x06000000
+#define DAC_DATA_MASK                0x00FFFFFF
 
 
 // ##########  types  #######################
