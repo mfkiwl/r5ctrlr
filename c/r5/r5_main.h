@@ -37,6 +37,7 @@
 #include <metal/version.h>
 #include "rsc_table.h"
 #include "max7301.h"
+#include "ad3552.h"
 
 //---------- openamp stuff  ------------------------
 #define IPI_DEV_NAME         "poll_dev"

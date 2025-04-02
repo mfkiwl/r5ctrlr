@@ -21,8 +21,8 @@
 #include "xil_printf.h"
 #include "common.h"
 
-// AXI SPI has base address 0x8003_0000,  which is XPAR_AXI_QUAD_SPI_0_BASEADDR in xparameters.h
-#define MAX7301_XSPI_BADDR     XPAR_AXI_QUAD_SPI_0_BASEADDR
+// AXI SPI has base address 0x8003_0000,  which is XPAR_MAX7301_SPI_0_BASEADDR in xparameters.h
+#define MAX7301_XSPI_BADDR     XPAR_MAX7301_SPI_0_BASEADDR
 
 // ##########  types  #######################
 

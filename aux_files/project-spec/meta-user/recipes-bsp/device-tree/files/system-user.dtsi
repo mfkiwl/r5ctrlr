@@ -47,6 +47,9 @@ axi {
 
 
 /delete-node/ &uart1;
+/delete-node/ &max7301_spi_0;
+/delete-node/ &AD3552_SPI_0;
+
 /*
 /delete-node/ &axi_gpio_0;
 /delete-node/ &axi_timer_0;

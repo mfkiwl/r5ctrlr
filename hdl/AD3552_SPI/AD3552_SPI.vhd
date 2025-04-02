@@ -174,6 +174,26 @@ signal SDIO_i            : std_logic_vector(3 downto 0);
 signal SDIO_o            : std_logic_vector(3 downto 0);
 signal SDIO_t            : std_logic_vector(3 downto 0);
 
+attribute mark_debug : string;
+attribute mark_debug of start_transaction: signal is "true";
+attribute mark_debug of busy: signal is "true";
+attribute mark_debug of DAC_bytenum: signal is "true";
+attribute mark_debug of DAC_wr_word: signal is "true";
+attribute mark_debug of DAC_rd_word: signal is "true";
+attribute mark_debug of errcode: signal is "true";
+attribute mark_debug of SPI_CE: signal is "true";
+attribute mark_debug of SPI_start: signal is "true";
+attribute mark_debug of SPI_busy: signal is "true";
+attribute mark_debug of SPI_wbyte: signal is "true";
+attribute mark_debug of SPI_rbyte: signal is "true";
+attribute mark_debug of SPI_RW: signal is "true";
+attribute mark_debug of SDIO_i: signal is "true";
+attribute mark_debug of SDIO_o: signal is "true";
+attribute mark_debug of SDIO_t: signal is "true";
+attribute mark_debug of SPI_CSn: signal is "true";
+attribute mark_debug of SPI_SCLK: signal is "true";
+attribute mark_debug of XLATOR_DIR: signal is "true";
+
 begin
 
 	DAC_CMD_reset <= not s00_axi_aresetn or DAC_soft_reset;
@@ -275,12 +295,14 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
         );
 
     -- instantiation of quadSPI IOBUF
+    -- note that assignment of I to SDIO_o and O to SDIO_i is correct;
+    -- see IOBUF doc, which is UG974
     SPI_IOBUF_array_i : for i in 0 to 3 generate
       IOBUF_i : IOBUF
         port map
           (
-          I  => SDIO_i(i),
-          O  => SDIO_o(i),
+          I  => SDIO_o(i),
+          O  => SDIO_i(i),
           T  => SDIO_t(i),
           IO => SPI_SDIO(i)
           );

@@ -558,6 +558,10 @@ int SetupSystem(void **platformp)
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
 
+  status = InitAD3552();
+  if(status!=XST_SUCCESS)
+    return XST_FAILURE;
+  
   // setup OpenAMP
   rproc = SetupRpmsg(0,0);
   if(!rproc)
