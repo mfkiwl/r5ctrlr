@@ -21,7 +21,7 @@ volatile u32 *DAC_BADDR[] = {(volatile u32 *)DAC_A_BADDR};
 
 // ##########  implementation  ################
 
-int InitAD3552(void)
+int TestAD3552(void)
   {
   int i, status, retries;
   u32 theval, theerr;
@@ -86,3 +86,109 @@ int InitAD3552(void)
   
   return XST_SUCCESS;
   }
+
+
+// -----------------------------------------------------------
+
+int WriteDacRegister(int DACindex, u32 addr, u8 data)
+  {
+  int errcode;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
+                                        DAC_ADDRESS_PHASE |
+                                        DAC_1_BYTE_TRANSACTION |
+                                        addr;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
+                                        DAC_DATA_PHASE |
+                                        DAC_LAST_TRANSACTION |
+                                        DAC_1_BYTE_TRANSACTION |
+                                        data;
+  errcode= (int)(*(DAC_BADDR[0]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  return errcode;
+  }
+
+
+// -----------------------------------------------------------
+
+
+int InitAD3552(void)
+  {
+  int i, status, retries;
+  u32 theval, theerr;
+  
+  // set CLK divider=2 and perform both HW and SW reset
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_2 | DAC_HW_RESET | DAC_SOFT_RESET;
+ 
+  usleep(RESET_WAIT);
+ 
+  // remove HW reset
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_2;
+  
+  // soft reset
+  theerr=WriteDacRegister(0,AD3552_INTERFACE_CONFIG_A, 0x91);
+  if(theerr!=DAC_SPI_NOERR) return XST_FAILURE;
+  
+  usleep(RESET_WAIT);
+  
+  // remove reset
+  theerr=WriteDacRegister(0,AD3552_INTERFACE_CONFIG_A, 0x10);
+  if(theerr!=DAC_SPI_NOERR) return XST_FAILURE;
+
+  // set 10V fullscale
+  theerr=WriteDacRegister(0,AD3552_CH0_CH1_OUTPUT_RANGE, 0x44);
+  if(theerr!=DAC_SPI_NOERR) return XST_FAILURE;
+
+  // 6-byte loopback on streaming
+  theerr=WriteDacRegister(0,AD3552_STREAM_MODE, 0x06);
+  if(theerr!=DAC_SPI_NOERR) return XST_FAILURE;
+
+  // keep loopback length between transactions
+  theerr=WriteDacRegister(0,AD3552_TRANSFER_REGISTER, 0x84);
+  if(theerr!=DAC_SPI_NOERR) return XST_FAILURE;
+
+  return XST_SUCCESS;
+  }
+
+
+// -----------------------------------------------------------
+
+int WriteDacSamples(int DACindex, u16 ch0data, u16 ch1data)
+  {
+  u32 ch0val, ch1val;
+  int errcode;
+
+  // reorder bytes for proper SPI transaction
+  ch0val= ((u32)(ch0data)>>8)&0x000000FF | ((u32)(ch0data)<<8)&0x0000FF00;
+  ch1val= ((u32)(ch1data)>>8)&0x000000FF | ((u32)(ch1data)<<8)&0x0000FF00;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
+                                        DAC_ADDRESS_PHASE |
+                                        DAC_1_BYTE_TRANSACTION |
+                                        0x4B;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
+                                        DAC_DATA_PHASE |
+                                        DAC_3_BYTE_TRANSACTION |
+                                        ch1val;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
+                                        DAC_DATA_PHASE |
+                                        DAC_LAST_TRANSACTION |
+                                        DAC_3_BYTE_TRANSACTION |
+                                        ch0val;
+  
+  errcode= (int)(*(DAC_BADDR[0]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  return errcode;
+  }
+
+
+// -----------------------------------------------------------
+
+int UpdateDacOutput(int DACindex)
+{
+int theerr;
+
+theerr=WriteDacRegister(0,AD3552_SW_LDAC_24B, 0x03);
+return theerr;
+}

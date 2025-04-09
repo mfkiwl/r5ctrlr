@@ -82,7 +82,7 @@ begin
               SDIO_o_r     <= wbyte(7 downto 4);
               nib_shiftin  <= SDIO_i;
               rbyte_reg    <= rbyte_reg;
-              SCLK_reg     <= '1';
+              SCLK_reg     <= '0';
               sm_state     <= SHIFTnibble1;
             else
               busy_r       <= '0';
@@ -96,13 +96,19 @@ begin
   
           ---------------------------
           when SHIFTnibble1 =>
-            busy_r       <= '1';
-            nib_shiftout <= nib_shiftout;
-            SDIO_o_r     <= nib_shiftout;
-            nib_shiftin  <= nib_shiftin;
-            rbyte_reg    <= rbyte_reg;
-            SCLK_reg     <= '0';
-            sm_state     <= SHIFTnibble2;
+            busy_r         <= '1';
+            nib_shiftout   <= nib_shiftout;
+            nib_shiftin    <= nib_shiftin;
+            rbyte_reg      <= rbyte_reg;
+            if(SCLK_reg='0') then
+              SDIO_o_r     <= SDIO_o_r;
+              SCLK_reg     <= '1';
+              sm_state     <= SHIFTnibble1;
+            else
+              SDIO_o_r     <= nib_shiftout;
+              SCLK_reg     <= '0';
+              sm_state     <= SHIFTnibble2;
+            end if;
   
           ---------------------------
           when SHIFTnibble2 =>

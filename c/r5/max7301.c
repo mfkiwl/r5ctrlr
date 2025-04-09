@@ -103,12 +103,5 @@ int InitMAX7301(void)
       break;
     }
 
-  if(status != XST_SUCCESS)
-    {
-    LPRINTF("Error in MAX7301 initialization.\r\n");
-    return XST_FAILURE;
-    }
-
-    LPRINTF("MAX7301 successfully initialized\r\n");
-    return XST_SUCCESS;
+  return status;
   }

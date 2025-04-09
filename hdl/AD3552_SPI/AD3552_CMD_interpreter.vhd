@@ -236,15 +236,19 @@ begin
           save_LAST    <= save_LAST;
           save_BYTENUM <= save_BYTENUM;
           errcode_r    <= errcode_r;
-          SPI_RW_r     <= SPI_RW_r;
 
           if((SPI_busy='0') and (old_busy='1')) then
             -- SPI engine done; send next byte
             if(bytecnt = 0) then
+              -- it was the last byte in transaction
               if(save_LAST = '1') then
                 CSn_static <= '1';
+                SPI_RW_r   <= '1';
+                RW_static  <= '1';
               else
                 CSn_static <= '0';
+                SPI_RW_r   <= SPI_RW_r;
+                RW_static  <= RW_static;
               end if;
               save_rd_word <= save_rd_word;
               save_wr_word <= save_wr_word;
@@ -265,7 +269,9 @@ begin
                   DAC_rd_word_latch <= save_rd_word;
               end case;
             else
+              -- we have other bytes to send/receive in transaction
               busy         <= '1';
+              SPI_RW_r     <= SPI_RW_r;
               DAC_rd_word_latch <= DAC_rd_word_latch;
               CSn_static   <= '0';
               bytecnt      <= bytecnt -1;
@@ -279,6 +285,7 @@ begin
             -- SPI engine not done yet
             SPI_start    <= '1';
             busy         <= '1';
+            SPI_RW_r     <= SPI_RW_r;
             DAC_rd_word_latch <= DAC_rd_word_latch;
             CSn_static        <= CSn_static;
             SPI_wbyte_r       <= SPI_wbyte_r;

@@ -28,6 +28,7 @@
 //#define DAC_B_BADDR     XPAR_AD3552_SPI_1_BASEADDR
 
 #define MAX_READ_RETRIES     10
+#define RESET_WAIT          10000UL
 
 // DAC register numbers
 #define STATUS_WORD     0
@@ -62,14 +63,22 @@
 #define DAC_3_BYTE_TRANSACTION       0x06000000
 #define DAC_DATA_MASK                0x00FFFFFF
 
+// AD3552 DAC internal register address
+#define AD3552_INTERFACE_CONFIG_A      0x00
+#define AD3552_STREAM_MODE             0x0E
+#define AD3552_TRANSFER_REGISTER       0x0F
+#define AD3552_CH0_CH1_OUTPUT_RANGE    0x19
+#define AD3552_SW_LDAC_24B             0x45
 
 // ##########  types  #######################
 
 // ##########  extern globals  ################
 
 // ##########  protos  ########################
+int TestAD3552(void);
 int InitAD3552(void);
-
-
+int WriteDacRegister(int DACindex, u32 addr, u8 data);
+int WriteDacSamples(int DACindex, u16 ch0data, u16 ch1data);
+int UpdateDacOutput(int DACindex);
 
 #endif

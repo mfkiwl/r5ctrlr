@@ -541,6 +541,34 @@ int SetupSystem(void **platformp)
 
   SetupExceptions();
 
+  // setup analog card (ADI CN0585)
+  status = InitMAX7301();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in MAX7301 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("MAX7301 successfully initialized\r\n");
+    }
+
+  status = InitAD3552();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in AD3552 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("AD3552 successfully initialized\r\n");
+    }
+
+  status = WriteDacSamples(0,0x4000, 0xC000);
+  status = UpdateDacOutput(0);
+
+
+  // setup PL stuff
   status = SetupAXIGPIO();
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
@@ -549,19 +577,11 @@ int SetupSystem(void **platformp)
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
 
+  // IRQ
   status = SetupIRQs();
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
 
-  // setup analog card (ADI CN0585)
-  status = InitMAX7301();
-  if(status!=XST_SUCCESS)
-    return XST_FAILURE;
-
-  status = InitAD3552();
-  if(status!=XST_SUCCESS)
-    return XST_FAILURE;
-  
   // setup OpenAMP
   rproc = SetupRpmsg(0,0);
   if(!rproc)
