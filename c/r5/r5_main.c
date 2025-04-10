@@ -525,6 +525,7 @@ static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index)
 int SetupSystem(void **platformp)
   {
   int status;
+  u8 rdbck;
   struct remoteproc *rproc;
   struct metal_init_params metal_param = METAL_INIT_DEFAULTS;
   unsigned int irqflags;
@@ -564,8 +565,20 @@ int SetupSystem(void **platformp)
     LPRINTF("AD3552 successfully initialized\r\n");
     }
 
+  status=ReadDacRegister(0,0x03, &rdbck);
+  status=ReadDacRegister(0,0x04, &rdbck);
+  status=ReadDacRegister(0,0x05, &rdbck);
+  status=ReadDacRegister(0,0x06, &rdbck);
+
+  status=ReadDacRegister(0,AD3552_SCRATCHPAD, &rdbck);
+  status=WriteDacRegister(0,AD3552_SCRATCHPAD, 0x41);
+
   status = WriteDacSamples(0,0x4000, 0xC000);
   status = UpdateDacOutput(0);
+
+  status=ReadDacRegister(0,AD3552_SCRATCHPAD, &rdbck);
+  status=WriteDacRegister(0,AD3552_SCRATCHPAD, 0xFC);
+  status=ReadDacRegister(0,AD3552_SCRATCHPAD, &rdbck);
 
 
   // setup PL stuff

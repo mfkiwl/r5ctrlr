@@ -27,9 +27,9 @@ int TestAD3552(void)
   u32 theval, theerr;
 
   // set CLK divider=2 and perform both HW and SW reset
-  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_2 | DAC_HW_RESET | DAC_SOFT_RESET;
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_NO_DIVIDER | DAC_HW_RESET | DAC_SOFT_RESET;
   // remove HW reset
-  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_2;
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_NO_DIVIDER;
 
   // test SPI WRITE
 //  *(DAC_BADDR[0]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
@@ -104,8 +104,50 @@ int WriteDacRegister(int DACindex, u32 addr, u8 data)
                                         DAC_LAST_TRANSACTION |
                                         DAC_1_BYTE_TRANSACTION |
                                         data;
-  errcode= (int)(*(DAC_BADDR[0]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  errcode= (int)(*(DAC_BADDR[DACindex]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
   return errcode;
+  }
+
+
+// -----------------------------------------------------------
+
+int ReadDacRegister(int DACindex, u32 addr, u8* dataptr)
+  {
+  int errcode, retries;
+  u32 theval;
+
+  // READ transactions cannot go at max speed; 
+  // see AD3552 datasheet page 6,
+  // parameter T9= SCLK falling edge to SDO data valid = 15 ns
+  // so we use a 62.5 MHz /4 clock for SPI SCLK instead of 
+  // the undivided 62.5 MHz for write transactions
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_4;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
+                                        DAC_ADDRESS_PHASE |
+                                        DAC_1_BYTE_TRANSACTION |
+                                        addr | DAC_ADDR_READ_TRANSACT;
+
+  *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_READ_TRANSACTION |
+                                        DAC_DATA_PHASE |
+                                        DAC_LAST_TRANSACTION |
+                                        DAC_1_BYTE_TRANSACTION;
+
+  retries=MAX_READ_RETRIES;
+  do
+    {
+    theval = *(DAC_BADDR[DACindex]+DAC_TRANSACT);
+    retries--;
+    }
+  while(((theval & DAC_TRANSACTION_ENDED_MASK)==0) && (retries>0));
+  
+  errcode= (int)(*(DAC_BADDR[DACindex]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  *dataptr = (u8)(theval & DAC_DATA_MASK & 0x000000FF);
+
+  // restore the fast SPI SCLK used for regular write transactions
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_NO_DIVIDER;
+
+  return (retries>0) ? errcode : DAC_SPI_ERR_RD_TIMEOUT;
   }
 
 
@@ -118,12 +160,12 @@ int InitAD3552(void)
   u32 theval, theerr;
   
   // set CLK divider=2 and perform both HW and SW reset
-  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_2 | DAC_HW_RESET | DAC_SOFT_RESET;
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_NO_DIVIDER | DAC_HW_RESET | DAC_SOFT_RESET;
  
   usleep(RESET_WAIT);
  
   // remove HW reset
-  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_2;
+  *(DAC_BADDR[0]+CTRL_WORD) = SPI_CLK_NO_DIVIDER;
   
   // soft reset
   theerr=WriteDacRegister(0,AD3552_INTERFACE_CONFIG_A, 0x91);
@@ -178,7 +220,7 @@ int WriteDacSamples(int DACindex, u16 ch0data, u16 ch1data)
                                         DAC_3_BYTE_TRANSACTION |
                                         ch0val;
   
-  errcode= (int)(*(DAC_BADDR[0]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  errcode= (int)(*(DAC_BADDR[DACindex]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
   return errcode;
   }
 
@@ -189,6 +231,6 @@ int UpdateDacOutput(int DACindex)
 {
 int theerr;
 
-theerr=WriteDacRegister(0,AD3552_SW_LDAC_24B, 0x03);
+theerr=WriteDacRegister(DACindex,AD3552_SW_LDAC_24B, 0x03);
 return theerr;
 }

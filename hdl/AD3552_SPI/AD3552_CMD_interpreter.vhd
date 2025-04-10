@@ -17,7 +17,7 @@ entity AD3552_CMD_interpreter is
     -- lines to the register bank
     start_transaction :  in std_logic;
     busy              : out std_logic;
-    DAC_SPI_CLK_div   :  in std_logic_vector(1 downto 0);
+    DAC_SPI_CLK_div   :  in std_logic_vector(3 downto 0);
     DAC_RW            :  in std_logic;
     DAC_addr_data     :  in std_logic;
     DAC_LAST          :  in std_logic;
@@ -31,6 +31,7 @@ entity AD3552_CMD_interpreter is
     SPI_wbyte         : out std_logic_vector(7 downto 0);
     SPI_rbyte         :  in std_logic_vector(7 downto 0);
     SPI_RW            : out std_logic;
+    SPI_nextRW        : out std_logic;
     SPI_start         : out std_logic;
     SPI_busy          :  in std_logic;
     -- output lines
@@ -52,9 +53,10 @@ architecture Behavioral of AD3552_CMD_interpreter is
   signal old_busy : std_logic;
   signal SPI_wbyte_r : std_logic_vector(7 downto 0);
   signal SPI_RW_r : std_logic;
+  signal SPI_nextRW_r : std_logic;
   signal errcode_r : std_logic_vector(3 downto 0);
   signal SPI_CEr : std_logic;
-  signal clk_cntr  : std_logic_vector(2 downto 0);
+  signal clk_cntr  : std_logic_vector(3 downto 0);
   -- "save" signals for multibyte transactions
   signal save_RW, save_LAST  : std_logic;
   signal save_wr_word  : std_logic_vector(15 downto 0);
@@ -70,26 +72,27 @@ begin
   SPI_CSn     <= CSn_static;
   SPI_wbyte   <= SPI_wbyte_r;
   SPI_RW      <= SPI_RW_r;
+  SPI_nextRW  <= SPI_nextRW_r;
   DAC_rd_word <= DAC_rd_word_latch;
   errcode     <= errcode_r;
 
   -- clock divider for SPI ext clock ------------------------
   SPI_CE <= SPI_CEr;
 
-  with DAC_SPI_CLK_div select
-    SPI_CEr <= '1'         when "00",
-               clk_cntr(0) when "01",
-               clk_cntr(1) when "10",
-               clk_cntr(2) when "11",
-               '1'         when others;
-
   clk_div_cntr: process(clk, reset)
   begin
   if(rising_edge(clk)) then
     if(reset='1') then
-      clk_cntr <= (others => '0');
+      clk_cntr <= DAC_SPI_CLK_div;
+      SPI_CEr  <= '0';
     else
-      clk_cntr <= std_logic_vector(unsigned(clk_cntr)+1);
+      if(clk_cntr = "0000") then
+        clk_cntr <= DAC_SPI_CLK_div;
+        SPI_CEr  <= '1';
+      else
+        clk_cntr <= std_logic_vector(unsigned(clk_cntr)-1);
+        SPI_CEr  <= '0';
+      end if;
     end if; -- if not reset
   end if;  -- if clock edge
   end process clk_div_cntr;
@@ -115,6 +118,7 @@ begin
       SPI_start         <= '0';
       CSn_static        <= '1';
       SPI_RW_r          <= '1';
+      SPI_nextRW_r      <= '1';
       RW_static         <= '1';
       sm_state          <= IDLE;
     else
@@ -137,6 +141,7 @@ begin
               save_wr_word   <= (others => '0');
               SPI_wbyte_r    <= SPI_wbyte_r;
               SPI_RW_r       <= '1';
+              SPI_nextRW_r   <= '1';
               CSn_static     <= '1';
               SPI_start      <= '0';
               sm_state       <= IDLE;
@@ -146,6 +151,7 @@ begin
               save_wr_word   <= (others => '0');
               SPI_wbyte_r    <= SPI_wbyte_r;
               SPI_RW_r       <= '1';
+              SPI_nextRW_r   <= '1';
               CSn_static     <= '1';
               SPI_start      <= '0';
               sm_state       <= IDLE;
@@ -159,6 +165,7 @@ begin
                 RW_static    <= DAC_wr_word(7);
                 save_wr_word <= (others => '0');
                 SPI_RW_r     <= '0';
+                SPI_nextRW_r <= DAC_wr_word(7);
                 SPI_start    <= '1';
                 sm_state     <= SHIFT_ADDR;
               else
@@ -168,6 +175,7 @@ begin
                 errcode_r    <= ERR_OVERRUN;
                 SPI_wbyte_r  <= SPI_wbyte_r;
                 SPI_RW_r     <= SPI_RW_r;
+                SPI_nextRW_r <= SPI_nextRW_r;
                 CSn_static   <= CSn_static;
                 SPI_start    <= '0';
                 sm_state     <= IDLE;
@@ -183,6 +191,7 @@ begin
                 save_wr_word   <= (others => '0');
                 SPI_wbyte_r    <= SPI_wbyte_r;
                 SPI_RW_r       <= '1';
+                SPI_nextRW_r   <= '1';
                 CSn_static     <= '1';
                 SPI_start      <= '0';
                 sm_state       <= IDLE;
@@ -197,6 +206,7 @@ begin
                 save_wr_word   <= DAC_wr_word(23 downto 8);
                 SPI_wbyte_r    <= DAC_wr_word(7 downto 0);
                 SPI_RW_r       <= DAC_RW;
+                SPI_nextRW_r   <= DAC_RW;
                 SPI_start      <= '1';
                 sm_state       <= SHIFT_BYTE;
               end if;
@@ -209,6 +219,7 @@ begin
             busy             <= '0';
             SPI_start        <= '0';
             SPI_RW_r         <= RW_static;
+            SPI_nextRW_r     <= RW_static;
             sm_state         <= IDLE;
           end if;
 
@@ -219,15 +230,17 @@ begin
           SPI_wbyte_r       <= SPI_wbyte_r;
           errcode_r         <= errcode_r;
           if((SPI_busy='0') and (old_busy='1')) then
-            SPI_start   <= '0';
-            busy        <= '0';
-            SPI_RW_r    <= RW_static;
-            sm_state    <= IDLE;
+            SPI_start    <= '0';
+            busy         <= '0';
+            SPI_RW_r     <= RW_static;
+            SPI_nextRW_r <= SPI_nextRW_r;
+            sm_state     <= IDLE;
           else
-            SPI_start   <= '1';
-            busy        <= '1';
-            SPI_RW_r    <= '0';
-            sm_state    <= SHIFT_ADDR;
+            SPI_start    <= '1';
+            busy         <= '1';
+            SPI_RW_r     <= '0';
+            SPI_nextRW_r <= SPI_nextRW_r;
+            sm_state     <= SHIFT_ADDR;
           end if;
 
         ---------------------------
@@ -242,13 +255,15 @@ begin
             if(bytecnt = 0) then
               -- it was the last byte in transaction
               if(save_LAST = '1') then
-                CSn_static <= '1';
-                SPI_RW_r   <= '1';
-                RW_static  <= '1';
+                CSn_static   <= '1';
+                SPI_RW_r     <= '1';
+                SPI_nextRW_r <= '1';
+                RW_static    <= '1';
               else
-                CSn_static <= '0';
-                SPI_RW_r   <= SPI_RW_r;
-                RW_static  <= RW_static;
+                CSn_static   <= '0';
+                SPI_RW_r     <= SPI_RW_r;
+                SPI_nextRW_r <= SPI_nextRW_r;
+                RW_static    <= RW_static;
               end if;
               save_rd_word <= save_rd_word;
               save_wr_word <= save_wr_word;
@@ -260,18 +275,19 @@ begin
               -- rearrange readback word to have the first read byte as LSByte
               case(save_BYTENUM) is
                 when "01" =>
-                  DAC_rd_word_latch <= "0000000000000000" & save_rd_word(23 downto 16);
+                  DAC_rd_word_latch <= "0000000000000000" & SPI_rbyte;
                 when "10" =>
-                  DAC_rd_word_latch <= "00000000" & save_rd_word(23 downto 8);
+                  DAC_rd_word_latch <= "00000000" & SPI_rbyte & save_rd_word(23 downto 16);
                 when "11" =>
-                  DAC_rd_word_latch <= save_rd_word;
+                  DAC_rd_word_latch <= SPI_rbyte & save_rd_word(23 downto 8);
                 when others =>
-                  DAC_rd_word_latch <= save_rd_word;
+                  DAC_rd_word_latch <= SPI_rbyte & save_rd_word(23 downto 8);
               end case;
             else
               -- we have other bytes to send/receive in transaction
               busy         <= '1';
               SPI_RW_r     <= SPI_RW_r;
+              SPI_nextRW_r <= SPI_nextRW_r;
               DAC_rd_word_latch <= DAC_rd_word_latch;
               CSn_static   <= '0';
               bytecnt      <= bytecnt -1;
@@ -286,6 +302,7 @@ begin
             SPI_start    <= '1';
             busy         <= '1';
             SPI_RW_r     <= SPI_RW_r;
+            SPI_nextRW_r <= SPI_nextRW_r;
             DAC_rd_word_latch <= DAC_rd_word_latch;
             CSn_static        <= CSn_static;
             SPI_wbyte_r       <= SPI_wbyte_r;
@@ -307,6 +324,7 @@ begin
           SPI_start         <= '0';
           CSn_static        <= '1';
           SPI_RW_r          <= '1';
+          SPI_nextRW_r      <= '1';
 
       end case;
     end if; -- if not reset

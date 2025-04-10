@@ -68,7 +68,7 @@ architecture arch_imp of AD3552_SPI is
 		busy              :  in std_logic;
     DAC_soft_reset    : out std_logic;
     DAC_hw_resetn     : out std_logic;
-		DAC_SPI_CLK_div   : out std_logic_vector(1 downto 0);
+		DAC_SPI_CLK_div   : out std_logic_vector(3 downto 0);
 		DAC_RW            : out std_logic;
 		DAC_addr_data     : out std_logic;
 		DAC_LAST          : out std_logic;
@@ -109,7 +109,7 @@ architecture arch_imp of AD3552_SPI is
 		  -- lines to the register bank
 		  start_transaction :  in std_logic;
 		  busy              : out std_logic;
-		  DAC_SPI_CLK_div   :  in std_logic_vector(1 downto 0);
+		  DAC_SPI_CLK_div   :  in std_logic_vector(3 downto 0);
 		  DAC_RW            :  in std_logic;
 		  DAC_addr_data     :  in std_logic;
 		  DAC_LAST          :  in std_logic;
@@ -123,6 +123,7 @@ architecture arch_imp of AD3552_SPI is
 		  SPI_wbyte         : out std_logic_vector(7 downto 0);
 		  SPI_rbyte         :  in std_logic_vector(7 downto 0);
 		  SPI_RW            : out std_logic;
+      SPI_nextRW        : out std_logic;
 		  SPI_start         : out std_logic;
 		  SPI_busy          :  in std_logic;
 		  -- output lines
@@ -142,6 +143,7 @@ architecture arch_imp of AD3552_SPI is
 		  wbyte             :  in std_logic_vector(7 downto 0);
 		  rbyte             : out std_logic_vector(7 downto 0);
 		  RW                :  in std_logic;
+      nextRW            :  in std_logic;
 		  -- lines to SPI
 		  XLATOR_DIR        : out std_logic; -- '1' means input to FPGA
 		  SCLK              : out std_logic;
@@ -155,7 +157,7 @@ signal DAC_CMD_reset     : std_logic;
 signal DAC_soft_reset     : std_logic;
 signal start_transaction : std_logic;
 signal busy              : std_logic;
-signal DAC_SPI_CLK_div   : std_logic_vector(1 downto 0);
+signal DAC_SPI_CLK_div   : std_logic_vector(3 downto 0);
 signal DAC_RW            : std_logic;
 signal DAC_addr_data     : std_logic;
 signal DAC_LAST          : std_logic;
@@ -168,6 +170,7 @@ signal SPI_CE            : std_logic;
 signal SPI_wbyte         : std_logic_vector(7 downto 0);
 signal SPI_rbyte         : std_logic_vector(7 downto 0);
 signal SPI_RW            : std_logic;
+signal SPI_nextRW        : std_logic;
 signal SPI_start         : std_logic;
 signal SPI_busy          : std_logic;
 signal SDIO_i            : std_logic_vector(3 downto 0);
@@ -267,6 +270,7 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
         SPI_wbyte         => SPI_wbyte,
         SPI_rbyte         => SPI_rbyte,
         SPI_RW            => SPI_RW,
+        SPI_nextRW        => SPI_nextRW,
         SPI_start         => SPI_start,
         SPI_busy          => SPI_busy,
         -- output lines
@@ -286,6 +290,7 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
         wbyte             => SPI_wbyte,
         rbyte             => SPI_rbyte,
         RW                => SPI_RW,
+        nextRW            => SPI_nextRW,
         -- lines to SPI
         XLATOR_DIR        => XLATOR_DIR,
         SCLK              => SPI_SCLK,

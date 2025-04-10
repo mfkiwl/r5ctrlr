@@ -42,12 +42,12 @@
 #define DAC_SPI_ERR_OVERRUN     2
 #define DAC_SPI_ERR_ZERO_BYTES  3
 #define DAC_SPI_ERR_SPI_BUSY    4
+// other err codes
+#define DAC_SPI_ERR_RD_TIMEOUT  16
 
 // DAC CTRL register constants
-#define SPI_CLK_DIVIDE_BY_2     0x00000000
-#define SPI_CLK_DIVIDE_BY_4     0x00000004
-#define SPI_CLK_DIVIDE_BY_8     0x00000008
-#define SPI_CLK_DIVIDE_BY_16    0x0000000C
+#define SPI_CLK_NO_DIVIDER      0x00000000
+#define SPI_CLK_DIVIDE_BY_4     0x0000000C
 #define DAC_HW_RESET            0x00000002
 #define DAC_SOFT_RESET          0x00000001
 
@@ -62,9 +62,11 @@
 #define DAC_2_BYTE_TRANSACTION       0x04000000
 #define DAC_3_BYTE_TRANSACTION       0x06000000
 #define DAC_DATA_MASK                0x00FFFFFF
+#define DAC_ADDR_READ_TRANSACT       0x00000080
 
 // AD3552 DAC internal register address
 #define AD3552_INTERFACE_CONFIG_A      0x00
+#define AD3552_SCRATCHPAD              0x0A
 #define AD3552_STREAM_MODE             0x0E
 #define AD3552_TRANSFER_REGISTER       0x0F
 #define AD3552_CH0_CH1_OUTPUT_RANGE    0x19
@@ -78,6 +80,7 @@
 int TestAD3552(void);
 int InitAD3552(void);
 int WriteDacRegister(int DACindex, u32 addr, u8 data);
+int ReadDacRegister(int DACindex, u32 addr, u8* dataptr);
 int WriteDacSamples(int DACindex, u16 ch0data, u16 ch1data);
 int UpdateDacOutput(int DACindex);
 
