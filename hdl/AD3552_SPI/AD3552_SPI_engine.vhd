@@ -1,8 +1,7 @@
 --
 -- quad SPI engine for communication with ADI DAC AD3552
 --
--- latest rev: mar 19 2025
---
+
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -71,51 +70,61 @@ begin
       SCLK_reg     <= '0';
       sm_state     <= IDLE;
     else
-      -- test CE = clock enable, to allow the use of a divided clock
-      if(ce='1') then
-        old_start    <= start_transaction;
+      -- the test on CE = clock enable, to allow for the use of a divided clock
+      -- is not done here globally, which would be simpler and would run the whole 
+      -- state machine at the divided clock rate;
+      -- instead, it is done case by case, to allow for fast response when needed;
+      -- for example, in the release of the outputs (+translator direction switch)
+      -- as soon as an incoming read transaction is detected
 
-        case(sm_state) is
-          ---------------------------
-          when IDLE =>
-            if((start_transaction='1') and (old_start='0')) then
-              busy_r       <= '1';
-              RW_save      <= RW;
-              nextRW_save  <= nextRW;
-              SDIO_t_r     <= (others => RW);
-              XLATOR_DIR_r <= RW;
-              nib_shiftout <= wbyte(3 downto 0);
-              SDIO_o_r     <= wbyte(7 downto 4);
-              nib_shiftin  <= SDIO_i;
-              rbyte_reg    <= rbyte_reg;
-              SCLK_reg     <= '0';
-              sm_state     <= SHIFTnibble1;
-            else
-              busy_r       <= '0';
-              RW_save      <= RW_save;
-              nextRW_save  <= nextRW_save;
-              SDIO_t_r     <= (others => nextRW_save);
-              XLATOR_DIR_r <= nextRW_save;
-              nib_shiftout <= (others => '0');
-              SDIO_o_r     <= (others => '0');
-              nib_shiftin  <= (others => '0');
-              rbyte_reg    <= rbyte_reg;
-              SCLK_reg     <= '0';
-              sm_state     <= IDLE;
-            end if;
+      if(ce='1') then
+        old_start <= start_transaction;
+      else
+        old_start <= old_start;
+      end if;
+
+      case(sm_state) is
+        ---------------------------
+        when IDLE =>
+          if((start_transaction='1') and (old_start='0') and (ce='1')) then
+            busy_r       <= '1';
+            RW_save      <= RW;
+            nextRW_save  <= nextRW;
+            SDIO_t_r     <= (others => RW);
+            XLATOR_DIR_r <= RW;
+            nib_shiftout <= wbyte(3 downto 0);
+            SDIO_o_r     <= wbyte(7 downto 4);
+            nib_shiftin  <= SDIO_i;
+            rbyte_reg    <= rbyte_reg;
+            SCLK_reg     <= '0';
+            sm_state     <= SHIFTnibble1;
+          else
+            busy_r       <= '0';
+            RW_save      <= RW_save;
+            nextRW_save  <= nextRW_save;
+            SDIO_t_r     <= (others => nextRW_save);
+            XLATOR_DIR_r <= nextRW_save;
+            nib_shiftout <= (others => '0');
+            SDIO_o_r     <= (others => '0');
+            nib_shiftin  <= (others => '0');
+            rbyte_reg    <= rbyte_reg;
+            SCLK_reg     <= '0';
+            sm_state     <= IDLE;
+          end if;
   
-          ---------------------------
-          when SHIFTnibble1 =>
-            busy_r         <= '1';
-            nib_shiftout   <= nib_shiftout;
-            nib_shiftin    <= nib_shiftin;
-            rbyte_reg      <= rbyte_reg;
-            SDIO_t_r       <= SDIO_t_r;
-            XLATOR_DIR_r   <= XLATOR_DIR_r;
-            RW_save        <= RW_save;
-            nextRW_save    <= nextRW_save;
-            SDIO_t_r       <= SDIO_t_r;
-            XLATOR_DIR_r   <= XLATOR_DIR_r;
+        ---------------------------
+        when SHIFTnibble1 =>
+          busy_r         <= '1';
+          nib_shiftout   <= nib_shiftout;
+          nib_shiftin    <= nib_shiftin;
+          rbyte_reg      <= rbyte_reg;
+          SDIO_t_r       <= SDIO_t_r;
+          XLATOR_DIR_r   <= XLATOR_DIR_r;
+          RW_save        <= RW_save;
+          nextRW_save    <= nextRW_save;
+          SDIO_t_r       <= SDIO_t_r;
+          XLATOR_DIR_r   <= XLATOR_DIR_r;
+          if(ce='1') then
             if(SCLK_reg='0') then
               SDIO_o_r     <= SDIO_o_r;
               SCLK_reg     <= '1';
@@ -125,18 +134,25 @@ begin
               SCLK_reg     <= '0';
               sm_state     <= SHIFTnibble2;
             end if;
-  
-          ---------------------------
-          when SHIFTnibble2 =>
-            busy_r       <= '1';
-            nib_shiftout <= nib_shiftout;
-            SDIO_o_r     <= nib_shiftout;
-            nib_shiftin  <= nib_shiftin;
-            rbyte_reg    <= nib_shiftin & SDIO_i;
-            RW_save      <= RW_save;
-            nextRW_save  <= nextRW_save;
-            SDIO_t_r     <= SDIO_t_r;
-            XLATOR_DIR_r <= XLATOR_DIR_r;
+          else
+            -- if not CE
+            SDIO_o_r     <= SDIO_o_r;
+            SCLK_reg     <= SCLK_reg;
+            sm_state     <= SHIFTnibble1;
+          end if;
+
+        ---------------------------
+        when SHIFTnibble2 =>
+          busy_r       <= '1';
+          nib_shiftout <= nib_shiftout;
+          SDIO_o_r     <= SDIO_o_r;
+          nib_shiftin  <= nib_shiftin;
+          rbyte_reg    <= nib_shiftin & SDIO_i;
+          RW_save      <= RW_save;
+          nextRW_save  <= nextRW_save;
+          SDIO_t_r     <= SDIO_t_r;
+          XLATOR_DIR_r <= XLATOR_DIR_r;
+          if(ce='1') then
             if(SCLK_reg='0') then
               SCLK_reg     <= '1';
               sm_state     <= SHIFTnibble2;
@@ -144,36 +160,41 @@ begin
               SCLK_reg     <= '0';
               sm_state     <= IDLE;
             end if;
-  
-          ---------------------------
-          when others =>
-            busy_r       <= '0';
-            nib_shiftout <= (others => '0');
-            SDIO_o_r     <= (others => '0');
-            nib_shiftin  <= (others => '0');
-            rbyte_reg    <= rbyte_reg;
-            SCLK_reg     <= '0';
-            RW_save      <= '1';
-            nextRW_save  <= '1';
-            SDIO_t_r     <= (others => '1');
-            XLATOR_DIR_r <= '1';
-            sm_state     <= IDLE;
-        end case;
-      else
-        -- if not clock enable, just latch everything
-        old_start    <= old_start;
-        RW_save      <= RW_save;
-        nextRW_save  <= nextRW_save;
-        SDIO_t_r     <= SDIO_t_r;
-        XLATOR_DIR_r <= XLATOR_DIR_r;
-        busy_r       <= busy_r;
-        nib_shiftout <= nib_shiftout;
-        SDIO_o_r     <= SDIO_o_r;
-        nib_shiftin  <= nib_shiftin;
-        rbyte_reg    <= rbyte_reg;
-        SCLK_reg     <= SCLK_reg;
-        sm_state     <= sm_state;        
-      end if; -- if clock enable
+          else
+            -- if not CE
+            SCLK_reg     <= SCLK_reg;
+            sm_state     <= SHIFTnibble2;
+          end if;
+
+        ---------------------------
+        when others =>
+          busy_r       <= '0';
+          nib_shiftout <= (others => '0');
+          SDIO_o_r     <= (others => '0');
+          nib_shiftin  <= (others => '0');
+          rbyte_reg    <= rbyte_reg;
+          SCLK_reg     <= '0';
+          RW_save      <= '1';
+          nextRW_save  <= '1';
+          SDIO_t_r     <= (others => '1');
+          XLATOR_DIR_r <= '1';
+          sm_state     <= IDLE;
+      end case;
+      --else
+      --  -- if not clock enable, just latch everything
+      --  old_start    <= old_start;
+      --  RW_save      <= RW_save;
+      --  nextRW_save  <= nextRW_save;
+      --  SDIO_t_r     <= SDIO_t_r;
+      --  XLATOR_DIR_r <= XLATOR_DIR_r;
+      --  busy_r       <= busy_r;
+      --  nib_shiftout <= nib_shiftout;
+      --  SDIO_o_r     <= SDIO_o_r;
+      --  nib_shiftin  <= nib_shiftin;
+      --  rbyte_reg    <= rbyte_reg;
+      --  SCLK_reg     <= SCLK_reg;
+      --  sm_state     <= sm_state;        
+      --end if; -- if clock enable
     end if; -- if not reset
   end if;  -- if clock edge
   end process main_loop;
