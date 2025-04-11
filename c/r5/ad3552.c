@@ -15,8 +15,7 @@
 
 // ##########  globals  #######################
 
-volatile u32 *DAC_BADDR[] = {(volatile u32 *)DAC_A_BADDR};
-// volatile u32 *DAC_BADDR[] = {(volatile u32 *)DAC_A_BADDR, (volatile u32 *)DAC_B_BADDR};
+volatile u32 *DAC_BADDR[] = {(volatile u32 *)DAC_A_BADDR, (volatile u32 *)DAC_B_BADDR};
 
 
 // ##########  implementation  ################
