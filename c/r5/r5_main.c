@@ -570,15 +570,22 @@ int SetupSystem(void **platformp)
   status=ReadDacRegister(0,0x05, &rdbck);
   status=ReadDacRegister(0,0x06, &rdbck);
 
-  status=ReadDacRegister(0,AD3552_SCRATCHPAD, &rdbck);
-  status=WriteDacRegister(0,AD3552_SCRATCHPAD, 0x41);
+  status=ReadDacRegister(1,0x03, &rdbck);
+  status=ReadDacRegister(1,0x04, &rdbck);
+  status=ReadDacRegister(1,0x05, &rdbck);
+  status=ReadDacRegister(1,0x06, &rdbck);
+
+  status=ReadDacRegister(1,AD3552_SCRATCHPAD, &rdbck);
+  status=WriteDacRegister(1,AD3552_SCRATCHPAD, 0x41);
 
   status = WriteDacSamples(0,0x4000, 0xC000);
   status = UpdateDacOutput(0);
+  status = WriteDacSamples(1,0xC000, 0x4000);
+  status = UpdateDacOutput(1);
 
-  status=ReadDacRegister(0,AD3552_SCRATCHPAD, &rdbck);
-  status=WriteDacRegister(0,AD3552_SCRATCHPAD, 0xFC);
-  status=ReadDacRegister(0,AD3552_SCRATCHPAD, &rdbck);
+  status=ReadDacRegister(1,AD3552_SCRATCHPAD, &rdbck);
+  status=WriteDacRegister(1,AD3552_SCRATCHPAD, 0xFC);
+  status=ReadDacRegister(1,AD3552_SCRATCHPAD, &rdbck);
 
 
   // setup PL stuff

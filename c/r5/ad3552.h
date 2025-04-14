@@ -77,7 +77,6 @@
 // ##########  extern globals  ################
 
 // ##########  protos  ########################
-int TestAD3552(void);
 int InitAD3552(void);
 int WriteDacRegister(int DACindex, u32 addr, u8 data);
 int ReadDacRegister(int DACindex, u32 addr, u8* dataptr);
