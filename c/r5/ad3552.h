@@ -72,6 +72,10 @@
 #define AD3552_CH0_CH1_OUTPUT_RANGE    0x19
 #define AD3552_SW_LDAC_24B             0x45
 
+// AD3552 scaling
+#define AD3552_AMPL                    (32768)
+#define AD3552_OFFS                    (32768)
+
 // ##########  types  #######################
 
 // ##########  extern globals  ################

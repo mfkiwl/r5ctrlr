@@ -227,11 +227,11 @@ int main(int argc, char *argv[])
   msglen=sizeof(LOOP_PARAM_MSG_TYPE);
   while(1)
     {
-    LPRINTF("Enter parameter#1 (float)     : ");
+    LPRINTF("Enter frequency (Hz, float)               : ");
     status=scanf("%f", &p1);
     if(status<1)
       break;
-    LPRINTF("Enter parameter#2 (signed int): ");
+    LPRINTF("Enter amplitude (%% full scale, signed int): ");
     status=scanf("%d", &p2);
     if(status<1)
       break;

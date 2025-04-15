@@ -69,6 +69,8 @@ static XTmrCtr_Config *timerConfig;
 float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
 
+double g2pi, gPhase, gdPhase, gFreq, gAmpl, g_y[4];
+
 
 // ##########  implementation  ################
 
@@ -663,6 +665,7 @@ int main()
   {
   unsigned int thereg, theval;
   int          status, i;
+  u16          dacval[4];
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -673,8 +676,8 @@ int main()
     irq_cntr[i]=0;
 
   // init sample loop parameters
-  gLoopParameters.param1=3.14;
-  gLoopParameters.param2=-37;
+  gLoopParameters.param1=1000.f;
+  gLoopParameters.param2=75;
 
 
   LPRINTF("\n\r*** R5 integrated controller ***\n\r\n\r");
@@ -701,24 +704,30 @@ int main()
     return status;
     }
 
+  g2pi=8.*atan(1.);
+  gPhase=0.0;
+  gAmpl=0.75;
+
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
     {
-    LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
-    LPRINTF(    "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
-    LPRINTF(    "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
-    LPRINTF(    "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
-    LPRINTF(    "Loop Parameter 1 (float): %d.%03d \n\r",
-        (int)(gLoopParameters.param1),
-        DECIMALS(gLoopParameters.param1,3));
-    LPRINTF(    "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
-    LPRINTF(    "Timer IRQ latency (ns)  : current= %d ; max= %d\n\r", (int)(gTimerIRQlatency*1.e9), (int)(gMaxLatency*1.e9));
-    // can't use sscanf in the main loop, to avoid loosing RPMSGs,
-    // so I print all the registers each time I get an IRQ,
-    // which is at least once a second from the timer IRQ
-    for(thereg=0; thereg<16; thereg++)
-      LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
+    // remember you can't use sscanf in the main loop, to avoid loosing RPMSGs
+
+    // LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
+    // LPRINTF(    "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
+    // LPRINTF(    "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
+    // LPRINTF(    "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
+    // LPRINTF(    "Loop Parameter 1 (float): %d.%03d \n\r",
+    //     (int)(gLoopParameters.param1),
+    //     DECIMALS(gLoopParameters.param1,3));
+    // LPRINTF(    "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
+    // LPRINTF(    "Timer IRQ latency (ns)  : current= %d ; max= %d\n\r", (int)(gTimerIRQlatency*1.e9), (int)(gMaxLatency*1.e9));
+    // // can't use sscanf in the main loop, to avoid loosing RPMSGs,
+    // // so I print all the registers each time I get an IRQ,
+    // // which is at least once a second from the timer IRQ
+    // for(thereg=0; thereg<16; thereg++)
+    //   LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
 
     _rproc_wait();
     // check whether we have a message from A53/linux
@@ -730,6 +739,25 @@ int main()
       gTimerIRQoccurred=0;
 
       // do something...
+      gFreq=gLoopParameters.param1;
+      gAmpl=gLoopParameters.param2*0.01;
+      gdPhase= g2pi*gFreq/(double)(TIMER_FREQ_HZ);
+      gPhase += gdPhase;
+      if(gPhase>g2pi)
+        gPhase -= g2pi;
+      g_y[0]=gAmpl*sin(gPhase);
+      g_y[1]=gAmpl*cos(gPhase);
+      g_y[2]=gAmpl*sin(2.*gPhase);
+      g_y[3]=gAmpl*cos(2.*gPhase);
+
+      for(i=0; i<4; i++)
+        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
+
+      status = WriteDacSamples(0,dacval[0], dacval[1]);
+      status = WriteDacSamples(1,dacval[2], dacval[3]);
+      status = UpdateDacOutput(0);
+      status = UpdateDacOutput(1);
+      
       }
 
     }
