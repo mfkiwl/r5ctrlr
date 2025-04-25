@@ -544,52 +544,6 @@ int SetupSystem(void **platformp)
 
   SetupExceptions();
 
-  // setup analog card (ADI CN0585)
-  status = InitMAX7301();
-  if(status!=XST_SUCCESS)
-    {
-    LPRINTF("Error in MAX7301 initialization.\r\n");
-    return XST_FAILURE;
-    }
-  else
-    {
-    LPRINTF("MAX7301 successfully initialized\r\n");
-    }
-
-  status = InitAD3552();
-  if(status!=XST_SUCCESS)
-    {
-    LPRINTF("Error in AD3552 initialization.\r\n");
-    return XST_FAILURE;
-    }
-  else
-    {
-    LPRINTF("AD3552 successfully initialized\r\n");
-    }
-
-  status=ReadDacRegister(0,0x03, &rdbck);
-  status=ReadDacRegister(0,0x04, &rdbck);
-  status=ReadDacRegister(0,0x05, &rdbck);
-  status=ReadDacRegister(0,0x06, &rdbck);
-
-  status=ReadDacRegister(1,0x03, &rdbck);
-  status=ReadDacRegister(1,0x04, &rdbck);
-  status=ReadDacRegister(1,0x05, &rdbck);
-  status=ReadDacRegister(1,0x06, &rdbck);
-
-  status=ReadDacRegister(1,AD3552_SCRATCHPAD, &rdbck);
-  status=WriteDacRegister(1,AD3552_SCRATCHPAD, 0x41);
-
-  status = WriteDacSamples(0,0x4000, 0xC000);
-  status = UpdateDacOutput(0);
-  status = WriteDacSamples(1,0xC000, 0x4000);
-  status = UpdateDacOutput(1);
-
-  status=ReadDacRegister(1,AD3552_SCRATCHPAD, &rdbck);
-  status=WriteDacRegister(1,AD3552_SCRATCHPAD, 0xFC);
-  status=ReadDacRegister(1,AD3552_SCRATCHPAD, &rdbck);
-
-
   // setup PL stuff
   status = SetupAXIGPIO();
   if(status!=XST_SUCCESS)
@@ -619,7 +573,6 @@ int SetupSystem(void **platformp)
     }
   
   // init RPMSG framework
-  LPRINTF("Try to create rpmsg endpoint\n\r");
   status = rpmsg_create_ept(&lept, rpdev, RPMSG_SERVICE_NAME,
                             RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
                             rpmsg_endpoint_cb,
@@ -629,7 +582,36 @@ int SetupSystem(void **platformp)
     LPERROR("Failed to create endpoint\n\r");
     return XST_FAILURE;
     }
-  LPRINTF("Successfully created rpmsg endpoint\n\r");
+  LPRINTF("created rpmsg endpoint\n\r");
+
+  // setup analog card (ADI CN0585)
+  status = InitMAX7301();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in MAX7301 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("MAX7301 successfully initialized\r\n");
+    }
+
+  status = InitAD3552();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in AD3552 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("AD3552 successfully initialized\r\n");
+    }
+
+  // set a known initial pattern on the DAC outputs for debug purposes
+  status = WriteDacSamples(0,0x4000, 0xC000);
+  status = UpdateDacOutput(0);
+  status = WriteDacSamples(1,0xC000, 0x4000);
+  status = UpdateDacOutput(1);
 
   return XST_SUCCESS;
   }
@@ -707,7 +689,7 @@ int main()
   g2pi=8.*atan(1.);
   gPhase=0.0;
   gAmpl=0.75;
-
+  
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)

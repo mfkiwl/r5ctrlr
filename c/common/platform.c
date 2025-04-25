@@ -29,16 +29,17 @@ struct rpmsg_device *create_rpmsg_vdev(void *platform, unsigned int vdev_index,
 #ifdef ARMR5
 // ########### R5 side
   shbuf_io = remoteproc_get_io_with_pa(rproc, SHARED_MEM_PA);
+  LPRINTF("waiting for A53/linux handshake\n\r");
 #else
 // ########### linux side
   shbuf_io = remoteproc_get_io_with_pa(rproc, SHARED_MEM_PA + SHARED_BUF_OFFSET);
+  LPRINTF("waiting for R5 handshake\n\r");
 #endif
 
   if(!shbuf_io)
     goto err1;
   shbuf = metal_io_phys_to_virt(shbuf_io, SHARED_MEM_PA + SHARED_BUF_OFFSET);
 
-  LPRINTF("creating remoteproc virtio\n\r");
   vdev = remoteproc_create_virtio(rproc, vdev_index, role, rst_cb);
   if(!vdev)
     {

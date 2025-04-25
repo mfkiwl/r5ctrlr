@@ -34,7 +34,7 @@ int WriteDacRegister(int DACindex, u32 addr, u8 data)
                                         DAC_LAST_TRANSACTION |
                                         DAC_1_BYTE_TRANSACTION |
                                         data;
-  errcode= (int)(*(DAC_BADDR[DACindex]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  errcode= (int)(*(DAC_BADDR[DACindex]+DAC_STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
   return errcode;
   }
 
@@ -51,7 +51,7 @@ int ReadDacRegister(int DACindex, u32 addr, u8* dataptr)
   // parameter T9= SCLK falling edge to SDO data valid = 15 ns
   // so we use a 62.5 MHz /4 clock for SPI SCLK instead of 
   // the undivided 62.5 MHz for write transactions
-  *(DAC_BADDR[DACindex]+CTRL_WORD) = SPI_CLK_DIVIDE_BY_4;
+  *(DAC_BADDR[DACindex]+DAC_CTRL_WORD) = SPI_CLK_DIVIDE_BY_4;
 
   *(DAC_BADDR[DACindex]+DAC_TRANSACT) = DAC_WRITE_TRANSACTION |
                                         DAC_ADDRESS_PHASE |
@@ -71,11 +71,11 @@ int ReadDacRegister(int DACindex, u32 addr, u8* dataptr)
     }
   while(((theval & DAC_TRANSACTION_ENDED_MASK)==0) && (retries>0));
   
-  errcode= (int)(*(DAC_BADDR[DACindex]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  errcode= (int)(*(DAC_BADDR[DACindex]+DAC_STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
   *dataptr = (u8)(theval & DAC_DATA_MASK & 0x000000FF);
 
   // restore the fast SPI SCLK used for regular write transactions
-  *(DAC_BADDR[DACindex]+CTRL_WORD) = SPI_CLK_NO_DIVIDER;
+  *(DAC_BADDR[DACindex]+DAC_CTRL_WORD) = SPI_CLK_NO_DIVIDER;
 
   return (retries>0) ? errcode : DAC_SPI_ERR_RD_TIMEOUT;
   }
@@ -91,13 +91,14 @@ int InitAD3552(void)
   
   for(i=0; i<NUM_DACS; i++)
     {
+
     // set CLK divider=2 and perform both HW and SW reset
-    *(DAC_BADDR[i]+CTRL_WORD) = SPI_CLK_NO_DIVIDER | DAC_HW_RESET | DAC_SOFT_RESET;
+    *(DAC_BADDR[i]+DAC_CTRL_WORD) = SPI_CLK_NO_DIVIDER | DAC_HW_RESET | DAC_SOFT_RESET;
      
     usleep(RESET_WAIT);
      
     // remove HW reset
-    *(DAC_BADDR[i]+CTRL_WORD) = SPI_CLK_NO_DIVIDER;
+    *(DAC_BADDR[i]+DAC_CTRL_WORD) = SPI_CLK_NO_DIVIDER;
     
     // soft reset
     theerr=WriteDacRegister(i,AD3552_INTERFACE_CONFIG_A, 0x91);
@@ -120,6 +121,7 @@ int InitAD3552(void)
     // keep loopback length between transactions
     theerr=WriteDacRegister(i,AD3552_TRANSFER_REGISTER, 0x84);
     if(theerr!=DAC_SPI_NOERR) return XST_FAILURE;
+
     }
 
   return XST_SUCCESS;
@@ -153,7 +155,7 @@ int WriteDacSamples(int DACindex, u16 ch0data, u16 ch1data)
                                         DAC_3_BYTE_TRANSACTION |
                                         ch0val;
   
-  errcode= (int)(*(DAC_BADDR[DACindex]+STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
+  errcode= (int)(*(DAC_BADDR[DACindex]+DAC_STATUS_WORD) & DAC_SPI_ERRCODE_MASK);
   return errcode;
   }
 

@@ -31,8 +31,8 @@
 #define RESET_WAIT          10000UL
 
 // DAC register numbers
-#define STATUS_WORD     0
-#define CTRL_WORD       1
+#define DAC_STATUS_WORD 0
+#define DAC_CTRL_WORD   1
 #define DAC_TRANSACT    2
 
 // DAC STATUS register constants
