@@ -22,7 +22,6 @@
 void *platform;
 // openamp
 static struct rpmsg_endpoint lept;
-static LOOP_PARAM_MSG_TYPE gLoopParameters;
 static LOOP_PARAM_MSG_TYPE *gMsgPtr;
 struct rpmsg_device *rpdev;
 static struct remoteproc rproc_inst;
@@ -202,8 +201,8 @@ int CleanupSystem(void *platform)
 
 int main(int argc, char *argv[])
   {
-  int status, p2, numbytes, msglen;
-  float p1;
+  int status, theAmp, numbytes, msglen;
+  float theFreq, theVolt;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -228,16 +227,21 @@ int main(int argc, char *argv[])
   while(1)
     {
     LPRINTF("Enter frequency (Hz, float)               : ");
-    status=scanf("%f", &p1);
+    status=scanf("%f", &theFreq);
     if(status<1)
       break;
     LPRINTF("Enter amplitude (%% full scale, signed int): ");
-    status=scanf("%d", &p2);
+    status=scanf("%d", &theAmp);
+    if(status<1)
+      break;
+    LPRINTF("Enter constant DAC#4 value (volt, float)  : ");
+    status=scanf("%f", &theVolt);
     if(status<1)
       break;
     // send new parameters to R5
-    gMsgPtr->param1=p1;
-    gMsgPtr->param2=p2;
+    gMsgPtr->freqHz=theFreq;
+    gMsgPtr->percentAmplitude=theAmp;
+    gMsgPtr->constValVolt=theVolt;
     numbytes= rpmsg_send(&lept, gMsgPtr, msglen);
     if(numbytes<msglen)
       LPRINTF("ERROR sending RPMSG\n");

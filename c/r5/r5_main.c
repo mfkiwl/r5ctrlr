@@ -70,7 +70,9 @@ static XTmrCtr_Config *timerConfig;
 float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
 
-double g2pi, gPhase, gdPhase, gFreq, gAmpl, g_y[4];
+u16    dacval[4];
+s16    adcval[4];
+double g2pi, gPhase, gdPhase, gFreq, gAmpl, gDCval, g_x[4], g_y[4];
 // table of execution times for profiling;
 // entries are <x>, <x^2>, min, max, N_entries
 double time_table[PROFILE_TIME_ENTRIES][5];
@@ -695,9 +697,7 @@ int main()
   {
   unsigned int thereg, theval;
   int          status, i;
-  u16          dacval[4];
   double       currtimer_us, sigma;
-  bool         first_step;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -709,8 +709,9 @@ int main()
     irq_cntr[i]=0;
 
   // init sample loop parameters
-  gLoopParameters.param1=1000.f;
-  gLoopParameters.param2=75;
+  gLoopParameters.freqHz=1000.f;
+  gLoopParameters.percentAmplitude=75;
+  gLoopParameters.constValVolt=3.5f;
 
   // init profiling time table
   ResetTimeTable();
@@ -741,10 +742,7 @@ int main()
 
   g2pi=8.*atan(1.);
   gPhase=0.0;
-  gAmpl=0.75;
   
-  first_step=true;
-
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
@@ -787,16 +785,25 @@ int main()
       #endif
 
       // do something...
-      gFreq=gLoopParameters.param1;
-      gAmpl=gLoopParameters.param2*0.01;
+      
+      // read ADCs with fullscale = 1.0
+      ReadADCs(adcval);
+      for(i=0; i<4; i++)
+        g_x[i]=adcval[i]/ADAQ23876_FULLSCALE_CNT;
+
+      // workout next DAC value
+      gFreq=gLoopParameters.freqHz;
+      gAmpl=gLoopParameters.percentAmplitude*0.01;
+      gDCval=gLoopParameters.constValVolt;
       gdPhase= g2pi*gFreq/(double)(TIMER_FREQ_HZ);
       gPhase += gdPhase;
       if(gPhase>g2pi)
         gPhase -= g2pi;
+      // work out next DAC values with fullscale = 1.0
       g_y[0]=gAmpl*sin(gPhase);
       g_y[1]=gAmpl*cos(gPhase);
       g_y[2]=gAmpl*sin(2.*gPhase);
-      g_y[3]=gAmpl*cos(2.*gPhase);
+      g_y[3]=gDCval/AD3552_FULLSCALE_VOLT;
 
       for(i=0; i<4; i++)
         dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
@@ -818,11 +825,23 @@ int main()
       AddTimeToTable(PROFILE_TIME_ENTRIES-1,currtimer_us);
       #endif
 
-      // every now and then print some statistics
-      #ifdef PROFILE
+      // every now and then print something
       if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= TIMER_FREQ_HZ)
         {
         last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
+
+        // print ADC values in volt
+        for(i=0; i<4; i++)
+          // LPRINTF("ADC#%d = %3d.%03d ",
+          //         i,
+          //         (int)(g_x[i]*ADAQ23876_FULLSCALE_VOLT),
+          //         DECIMALS(g_x[i]*ADAQ23876_FULLSCALE_VOLT,3)
+          //        );
+          LPRINTF("ADC#%d = %6d ",i, adcval[i]);
+        LPRINTF("\n\r");
+
+        // print profiling info
+        #ifdef PROFILE
         LPRINTF("Number of Timer IRQs          : %d\n\r", last_irq_cnt);
 
         LPRINTF("Timer IRQ latency (us)        : avg= %d.%03d ; max= %d.%03d\n\r", 
@@ -844,8 +863,8 @@ int main()
           (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_MAX]) );
   
         LPRINTF("\n\r");
+        #endif
         }
-      #endif
 
       }  // if timer occurred
 

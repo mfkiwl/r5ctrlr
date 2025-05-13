@@ -26,14 +26,6 @@
 #define RSC_MEM_PA          0x3ED48000UL
 #define RSC_MEM_SIZE        0x2000UL
 
-// ##########  types  #######################
-typedef struct
-  {
-  float param1;
-  int param2;
-  } LOOP_PARAM_MSG_TYPE;
-
-
 // ##########  extern globals  ################
 
 

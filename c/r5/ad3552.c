@@ -7,7 +7,7 @@
 //
 //////////////////////////////////////////
 //
-// this is the setup of the two dual DACs AD3552 on ADI CN0585
+// this is the management of the two dual DACs AD3552 on ADI CN0585
 // It's interfaced via our custom IP in PL
 //
 

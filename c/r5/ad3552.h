@@ -7,7 +7,7 @@
 //
 //////////////////////////////////////////
 //
-// this is the setup of the two dual DACs AD3552 on ADI CN0585
+// this is the management of the two dual DACs AD3552 on ADI CN0585
 // It's interfaced via our custom IP in PL
 //
 
@@ -75,6 +75,7 @@
 // AD3552 scaling
 #define AD3552_AMPL                    (32768)
 #define AD3552_OFFS                    (32768)
+#define AD3552_FULLSCALE_VOLT          (10.0)
 
 // ##########  types  #######################
 

@@ -38,6 +38,7 @@
 #include "rsc_table.h"
 #include "max7301.h"
 #include "ad3552.h"
+#include "adaq23876.h"
 
 //---------- openamp stuff  ------------------------
 #define IPI_DEV_NAME         "poll_dev"
@@ -79,7 +80,7 @@
 #define IPI_CNTR           3
 
 // #defines for time profiling table
-#define PROFILE
+//#define PROFILE
 #define PROFILE_TIME_ENTRIES    10
 #define PROFTIME_AVG             0
 #define PROFTIME_AVG2            1
@@ -90,12 +91,6 @@
 
 
 // ##########  types  #######################
-typedef struct
-  {
-  float param1;
-  int param2;
-  } LOOP_PARAM_MSG_TYPE;
-
 
 // ##########  extern globals  ################
 
