@@ -831,8 +831,9 @@ int main()
 
       status = WriteDacSamples(0,dacval[0], dacval[1]);
       status = WriteDacSamples(1,dacval[2], dacval[3]);
-      status = UpdateDacOutput(0);
-      status = UpdateDacOutput(1);
+      // DAC output will be updated by hardware /LDAC pulse on next cycle 
+      //status = UpdateDacOutput(0);
+      //status = UpdateDacOutput(1);
 
       // register time of end of control loop step
       #ifdef PROFILE
