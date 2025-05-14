@@ -816,6 +816,10 @@ int main()
       g_y[2]=gAmpl*sin(2.*gPhase);
       g_y[3]=gDCval/AD3552_FULLSCALE_VOLT;
 
+      // DAC AD3552 is offset binary;
+      // usual conversion from 2's complement is done inverting the MSB,
+      // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
+      // so I just scale and offset at the end, which is clearer
       for(i=0; i<4; i++)
         dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
 
