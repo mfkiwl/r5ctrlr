@@ -17,6 +17,8 @@ entity QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI is
 	port (
 		-- Users to add ports here
     -- valerix
+    ADC_SCLK_div      : out std_logic_vector( 3 downto 0);
+    ADC_Tfirstclk     : out std_logic_vector( 4 downto 0);
     sample_B_A        :  in std_logic_vector(31 downto 0);
     sample_D_C        :  in std_logic_vector(31 downto 0);
     sample_valid      :  in std_logic;                       -- not used here
@@ -218,7 +220,11 @@ begin
 	  if rising_edge(S_AXI_ACLK) then 
 	    if S_AXI_ARESETN = '0' then
 	      slv_reg0 <= (others => '0');
-	      slv_reg1 <= (others => '0');
+        -- valerix: sensible defaults for control register
+	      slv_reg1(31 downto 9) <= (others => '0');  -- spare
+        slv_reg1( 8 downto 4) <= "01001";          -- Tfirstclk in 8ns units
+        slv_reg1( 3 downto 0) <= "0000";           -- SCLK divider -1
+
 	      slv_reg2 <= (others => '0');
 	      slv_reg3 <= (others => '0');
 	      slv_reg4 <= (others => '0');
@@ -369,6 +375,10 @@ begin
 	 (others => '0');
 
 	-- Add user logic here
+  
+  -- valerix: assign outputs from WRITE registers
+  ADC_SCLK_div  <= slv_reg1(3 downto 0);
+  ADC_Tfirstclk <= slv_reg1(8 downto 4);
 
 	-- User logic ends
 

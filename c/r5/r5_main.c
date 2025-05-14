@@ -620,6 +620,17 @@ int SetupSystem(void **platformp)
     LPRINTF("AD3552 successfully initialized\r\n");
     }
 
+  status = InitADAQ23876();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in ADAQ23876 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("ADAQ23876 successfully initialized\r\n");
+    }
+
   // set a known initial pattern on the DAC outputs for debug purposes
   status = WriteDacSamples(0,0x4000, 0xC000);
   status = UpdateDacOutput(0);

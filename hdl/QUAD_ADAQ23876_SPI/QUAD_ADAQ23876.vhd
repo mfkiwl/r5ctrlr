@@ -69,6 +69,8 @@ architecture arch_imp of QUAD_ADAQ23876 is
 		C_S_AXI_ADDR_WIDTH	: integer	:= 5
 		);
 		port (
+    ADC_SCLK_div      : out std_logic_vector( 3 downto 0);
+    ADC_Tfirstclk     : out std_logic_vector( 4 downto 0);
     sample_B_A        :  in std_logic_vector(31 downto 0);
     sample_D_C        :  in std_logic_vector(31 downto 0);
     sample_valid      :  in std_logic;
@@ -104,6 +106,8 @@ component ADAQ23876_SPI_engine is
     clk               :  in std_logic;
     -- conv clk is external
     convclk           :  in std_logic;
+    ADC_SCLK_div      :  in std_logic_vector( 3 downto 0);
+    ADC_Tfirstclk     :  in std_logic_vector( 4 downto 0);
     -- lines to AXI interface
     sample_B_A        : out std_logic_vector(31 downto 0);
     sample_D_C        : out std_logic_vector(31 downto 0);
@@ -117,11 +121,21 @@ end component ADAQ23876_SPI_engine;
 
 signal sample_B_A    : std_logic_vector(31 downto 0);
 signal sample_D_C    : std_logic_vector(31 downto 0);
+signal ADC_SCLK_div  : std_logic_vector( 3 downto 0);
+signal ADC_Tfirstclk : std_logic_vector( 4 downto 0);
 signal sample_valid  : std_logic;
 signal res           : std_logic;
 signal SCLK          : std_logic;
 signal DA            : std_logic_vector(3 downto 0);
 signal DB            : std_logic_vector(3 downto 0);
+
+attribute mark_debug : string;
+attribute mark_debug of SCLK: signal is "true";
+attribute mark_debug of DA: signal is "true";
+attribute mark_debug of DB: signal is "true";
+attribute mark_debug of sample_B_A: signal is "true";
+attribute mark_debug of sample_D_C: signal is "true";
+attribute mark_debug of conv_strobe: signal is "true";
 
 
 begin
@@ -135,6 +149,8 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
 		C_S_AXI_ADDR_WIDTH	=> C_S00_AXI_ADDR_WIDTH
 	)
 	port map (
+    ADC_SCLK_div => ADC_SCLK_div,
+    ADC_Tfirstclk => ADC_Tfirstclk,
     sample_B_A => sample_B_A,
     sample_D_C => sample_D_C,
     sample_valid => sample_valid,
@@ -169,7 +185,9 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
       clk               => s00_axi_aclk,
       -- conv clk is external
       convclk           => conv_strobe,
-      -- lines to AXI interface
+      ADC_SCLK_div      => ADC_SCLK_div,
+      ADC_Tfirstclk     => ADC_Tfirstclk,
+        -- lines to AXI interface
       sample_B_A        => sample_B_A,
       sample_D_C        => sample_D_C,
       sample_valid      => sample_valid,

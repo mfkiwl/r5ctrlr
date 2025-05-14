@@ -32,6 +32,9 @@
 #define ADC_chan_B_A    2
 #define ADC_chan_D_C    3
 
+#define ADC_TACQ        (10<<4)
+#define ADC_SCLK_DIV    (2)
+
 // ADAQ23876 scaling
 #define ADAQ23876_FULLSCALE_CNT     (32768.0)
 #define ADAQ23876_FULLSCALE_VOLT       (10.0)
@@ -41,6 +44,7 @@
 // ##########  extern globals  ################
 
 // ##########  protos  ########################
+int InitADAQ23876(void);
 // s16 means signed int 16
 void ReadADCs(s16 *ptr);
 

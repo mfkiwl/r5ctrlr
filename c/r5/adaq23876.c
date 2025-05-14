@@ -17,6 +17,17 @@
 
 // ##########  implementation  ################
 
+int InitADAQ23876(void)
+  {
+  int i, status;
+  *((volatile u32 *)XPAR_QUAD_ADAQ23876_0_BASEADDR+ADC_CTRL_WORD) = ADC_TACQ | ADC_SCLK_DIV;
+
+  return XST_SUCCESS;
+  }
+
+
+// -----------------------------------------------------------
+
 // s16 means signed int 16
 void ReadADCs(s16 *ptr)
   {
