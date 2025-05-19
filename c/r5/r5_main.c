@@ -1,18 +1,16 @@
 //
-// R5 demo application
+// R5 integrated controller 
+// ZCU102 + ADI CN0585/CN0584
+//
 // IRQs from PL and 
 // interproc communications with A53/linux
 //
-// this is the R5 side
+//////////////////////////////////////////
 //
-// features:
-//    - IRQ from register bank
-//    - IRQ from AXI GPIO
-//    - IRQ from AXI timer
-//    - readout register in register bank
-//    - get parameters from linux
+// this is the R5 main side
 //
-// latest rev: nov 5 2024
+//
+// latest rev: mar 6 2025
 //
 
 #include "r5_main.h"
@@ -64,12 +62,20 @@ static struct remoteproc rproc_inst;
 XScuGic interruptController;
 static XScuGic_Config *gicConfig;
 unsigned long int irq_cntr[4];
+unsigned long last_irq_cnt;
 XGpio theGpio;
 static XGpio_Config *gpioConfig;
 XTmrCtr theTimer;
 static XTmrCtr_Config *timerConfig;
 float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
+
+u16    dacval[4];
+s16    adcval[4];
+double g2pi, gPhase, gdPhase, gFreq, gAmpl, gDCval, g_x[4], g_y[4];
+// table of execution times for profiling;
+// entries are <x>, <x^2>, min, max, N_entries
+double time_table[PROFILE_TIME_ENTRIES][5];
 
 
 // ##########  implementation  ################
@@ -171,6 +177,16 @@ void GpioISR(void *callbackRef)
 
 
 // -----------------------------------------------------------
+
+static inline double GetTimer_us(void)
+  {
+  u32 loadReg, cnts;
+  cnts=XTmrCtr_GetValue(&theTimer, TIMER_NUMBER);
+  loadReg=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
+  return 1.e6*(loadReg - cnts)/(1.0*timerConfig->SysClockFreqHz);
+  }
+
+// -----------------------------------------------------------
 /*
 static void TimerISR(void *callbackRef, u8 timer_num)
   {
@@ -206,10 +222,7 @@ void FiqHandler(void *cb)
   //printf("FIQ\n\r");
 
   // read current counter value to measure latency
-  cnts=XTmrCtr_GetValue(timerPtr, TIMER_NUMBER);
-  loadReg=XTmrCtr_ReadReg(timerPtr->BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
-  gTimerIRQlatency=(loadReg - cnts)/(1.0*timerConfig->SysClockFreqHz);
-  //gTimerIRQlatency=(timerConfig->SysClockFreqHz/TIMER_FREQ_HZ - cnts*1.0)/timerConfig->SysClockFreqHz;
+  gTimerIRQlatency=GetTimer_us();
 
   // clear AXI timer IRQ bit to acknowledge interrupt
   controlStatusReg = XTmrCtr_ReadReg(timerPtr->BaseAddress, TIMER_NUMBER, XTC_TCSR_OFFSET);
@@ -527,6 +540,7 @@ static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index)
 int SetupSystem(void **platformp)
   {
   int status;
+  u8 rdbck;
   struct remoteproc *rproc;
   struct metal_init_params metal_param = METAL_INIT_DEFAULTS;
   unsigned int irqflags;
@@ -543,6 +557,7 @@ int SetupSystem(void **platformp)
 
   SetupExceptions();
 
+  // setup PL stuff
   status = SetupAXIGPIO();
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
@@ -551,10 +566,12 @@ int SetupSystem(void **platformp)
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
 
+  // IRQ
   status = SetupIRQs();
   if(status!=XST_SUCCESS)
     return XST_FAILURE;
 
+  // setup OpenAMP
   rproc = SetupRpmsg(0,0);
   if(!rproc)
     return XST_FAILURE;
@@ -569,7 +586,6 @@ int SetupSystem(void **platformp)
     }
   
   // init RPMSG framework
-  LPRINTF("Try to create rpmsg endpoint\n\r");
   status = rpmsg_create_ept(&lept, rpdev, RPMSG_SERVICE_NAME,
                             RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
                             rpmsg_endpoint_cb,
@@ -579,7 +595,47 @@ int SetupSystem(void **platformp)
     LPERROR("Failed to create endpoint\n\r");
     return XST_FAILURE;
     }
-  LPRINTF("Successfully created rpmsg endpoint\n\r");
+  LPRINTF("created rpmsg endpoint\n\r");
+
+  // setup analog card (ADI CN0585)
+  status = InitMAX7301();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in MAX7301 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("MAX7301 successfully initialized\r\n");
+    }
+
+  status = InitAD3552();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in AD3552 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("AD3552 successfully initialized\r\n");
+    }
+
+  status = InitADAQ23876();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in ADAQ23876 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("ADAQ23876 successfully initialized\r\n");
+    }
+
+  // set a known initial pattern on the DAC outputs for debug purposes
+  status = WriteDacSamples(0,0x4000, 0xC000);
+  status = UpdateDacOutput(0);
+  status = WriteDacSamples(1,0xC000, 0x4000);
+  status = UpdateDacOutput(1);
 
   return XST_SUCCESS;
   }
@@ -609,25 +665,67 @@ int CleanupSystem(void *platform)
   return status;
   }
 
+
+// -----------------------------------------------------------
+
+void ResetTimeTable(void)
+  {
+  int i,j;
+  for(i=0; i<PROFILE_TIME_ENTRIES; i++)
+    for(j=0; j<5; j++)
+      time_table[i][j]=0.0;
+  }
+
+// -----------------------------------------------------------
+
+void AddTimeToTable(int theindex, double thetime)
+  {
+  // add time value to table for profiling
+  // entries are <x>, <x^2>, min, max, N_entries
+  double N;
+  
+  // min
+  if(thetime<time_table[theindex][PROFTIME_MIN])
+    time_table[theindex][PROFTIME_MIN]=thetime;
+
+  // max
+  if(thetime>time_table[theindex][PROFTIME_MAX])
+    time_table[theindex][PROFTIME_MAX]=thetime;
+  
+  // increment num of entries for this time
+  N= ++time_table[theindex][PROFTIME_N];
+
+  // x mean
+  time_table[theindex][PROFTIME_AVG] = time_table[theindex][PROFTIME_AVG] *(N-1)/N + thetime/N;
+
+  // x^2 mean
+  time_table[theindex][PROFTIME_AVG2] = time_table[theindex][PROFTIME_AVG2] *(N-1)/N + thetime*thetime/N;
+  }
+
 // -----------------------------------------------------------
 
 int main()
   {
   unsigned int thereg, theval;
   int          status, i;
+  double       currtimer_us, sigma;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
   setvbuf (stdin, NULL, _IONBF, 0);
   
   // init number of IRQ served
+  last_irq_cnt=0;
   for(i=0; i<4; i++)
     irq_cntr[i]=0;
 
   // init sample loop parameters
-  gLoopParameters.param1=3.14;
-  gLoopParameters.param2=-37;
+  gLoopParameters.freqHz=1000.f;
+  gLoopParameters.percentAmplitude=75;
+  gLoopParameters.constValVolt=3.5f;
 
+  // init profiling time table
+  ResetTimeTable();
 
   LPRINTF("\n\r*** R5 integrated controller ***\n\r\n\r");
 #ifdef ARMR5
@@ -653,24 +751,29 @@ int main()
     return status;
     }
 
+  g2pi=8.*atan(1.);
+  gPhase=0.0;
+  
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
     {
-    LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
-    LPRINTF(    "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
-    LPRINTF(    "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
-    LPRINTF(    "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
-    LPRINTF(    "Loop Parameter 1 (float): %d.%03d \n\r",
-        (int)(gLoopParameters.param1),
-        DECIMALS(gLoopParameters.param1,3));
-    LPRINTF(    "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
-    LPRINTF(    "Timer IRQ latency (ns)  : current= %d ; max= %d\n\r", (int)(gTimerIRQlatency*1.e9), (int)(gMaxLatency*1.e9));
-    // can't use sscanf in the main loop, to avoid loosing RPMSGs,
-    // so I print all the registers each time I get an IRQ,
-    // which is at least once a second from the timer IRQ
-    for(thereg=0; thereg<16; thereg++)
-      LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
+    // remember you can't use sscanf in the main loop, to avoid loosing RPMSGs
+
+    // LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
+    // LPRINTF(    "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
+    // LPRINTF(    "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
+    // LPRINTF(    "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
+    // LPRINTF(    "Loop Parameter 1 (float): %d.%03d \n\r",
+    //     (int)(gLoopParameters.param1),
+    //     DECIMALS(gLoopParameters.param1,3));
+    // LPRINTF(    "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
+    // LPRINTF(    "Timer IRQ latency (ns)  : current= %d ; max= %d\n\r", (int)(gTimerIRQlatency*1.e9), (int)(gMaxLatency*1.e9));
+    // // can't use sscanf in the main loop, to avoid loosing RPMSGs,
+    // // so I print all the registers each time I get an IRQ,
+    // // which is at least once a second from the timer IRQ
+    // for(thereg=0; thereg<16; thereg++)
+    //   LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
 
     _rproc_wait();
     // check whether we have a message from A53/linux
@@ -681,10 +784,107 @@ int main()
       // reset timer IRQ flag
       gTimerIRQoccurred=0;
 
-      // do something...
-      }
+      // register IRQ latency as row 0 of prifile time table
+      #ifdef PROFILE
+      AddTimeToTable(0,gTimerIRQlatency);
+      #endif
 
-    }
+      // register start time of control loop step calculation
+      #ifdef PROFILE
+      currtimer_us=GetTimer_us();
+      AddTimeToTable(1,currtimer_us);
+      #endif
+
+      // do something...
+      
+      // read ADCs with fullscale = 1.0
+      ReadADCs(adcval);
+      for(i=0; i<4; i++)
+        g_x[i]=adcval[i]/ADAQ23876_FULLSCALE_CNT;
+
+      // workout next DAC value
+      gFreq=gLoopParameters.freqHz;
+      gAmpl=gLoopParameters.percentAmplitude*0.01;
+      gDCval=gLoopParameters.constValVolt;
+      gdPhase= g2pi*gFreq/(double)(TIMER_FREQ_HZ);
+      gPhase += gdPhase;
+      if(gPhase>g2pi)
+        gPhase -= g2pi;
+      // work out next DAC values with fullscale = 1.0
+      g_y[0]=gAmpl*sin(gPhase);
+      g_y[1]=gAmpl*cos(gPhase);
+      g_y[2]=gAmpl*sin(2.*gPhase);
+      g_y[3]=gDCval/AD3552_FULLSCALE_VOLT;
+
+      // DAC AD3552 is offset binary;
+      // usual conversion from 2's complement is done inverting the MSB,
+      // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
+      // so I just scale and offset at the end, which is clearer
+      for(i=0; i<4; i++)
+        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
+
+      // register time of end of sine wave calculation
+      #ifdef PROFILE
+      currtimer_us=GetTimer_us();
+      AddTimeToTable(2,currtimer_us);
+      #endif
+
+      status = WriteDacSamples(0,dacval[0], dacval[1]);
+      status = WriteDacSamples(1,dacval[2], dacval[3]);
+      // DAC output will be updated by hardware /LDAC pulse on next cycle 
+      //status = UpdateDacOutput(0);
+      //status = UpdateDacOutput(1);
+
+      // register time of end of control loop step
+      #ifdef PROFILE
+      currtimer_us=GetTimer_us();
+      AddTimeToTable(PROFILE_TIME_ENTRIES-1,currtimer_us);
+      #endif
+
+      // every now and then print something
+      if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= TIMER_FREQ_HZ)
+        {
+        last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
+
+        // print ADC values in volt
+        for(i=0; i<4; i++)
+          // LPRINTF("ADC#%d = %3d.%03d ",
+          //         i,
+          //         (int)(g_x[i]*ADAQ23876_FULLSCALE_VOLT),
+          //         DECIMALS(g_x[i]*ADAQ23876_FULLSCALE_VOLT,3)
+          //        );
+          LPRINTF("ADC#%d = %6d ",i, adcval[i]);
+        LPRINTF("\n\r");
+
+        // print profiling info
+        #ifdef PROFILE
+        LPRINTF("Number of Timer IRQs          : %d\n\r", last_irq_cnt);
+
+        LPRINTF("Timer IRQ latency (us)        : avg= %d.%03d ; max= %d.%03d\n\r", 
+          (int)(time_table[0][PROFTIME_AVG]), DECIMALS(time_table[0][PROFTIME_AVG],3),
+          (int)(time_table[0][PROFTIME_MAX]), DECIMALS(time_table[0][PROFTIME_MAX],3) );
+
+        LPRINTF("Ctrl loop step start (us)     : avg= %d.%03d ; max= %d.%03d\n\r", 
+          (int)(time_table[1][PROFTIME_AVG]), DECIMALS(time_table[1][PROFTIME_AVG],3),
+          (int)(time_table[1][PROFTIME_MAX]), DECIMALS(time_table[1][PROFTIME_MAX],3) );
+  
+        sigma=time_table[2][PROFTIME_AVG2]-time_table[2][PROFTIME_AVG]*time_table[2][PROFTIME_AVG];
+        LPRINTF("End of Sine Wave Calc (us)    : avg= %d ; s= %d.%03d; max= %d\n\r", 
+          (int)(time_table[2][PROFTIME_AVG]), 
+          (int)(sigma), DECIMALS(sigma, 3),
+          (int)(time_table[2][PROFTIME_MAX]) );
+
+        LPRINTF("Ctrl loop step end (us)       : avg= %d ; max= %d\n\r", 
+          (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_AVG]), 
+          (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_MAX]) );
+  
+        LPRINTF("\n\r");
+        #endif
+        }
+
+      }  // if timer occurred
+
+    }  // if not shutdown
 
   LPRINTF("\n\rExiting\n\r");
 

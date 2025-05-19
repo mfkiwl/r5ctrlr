@@ -9,6 +9,7 @@ serial@ff010000 {
 
 aliases {
                 /delete-property/ serial1;
+                /delete-property/ spi1;
         };
 
 reserved-memory {
@@ -47,12 +48,17 @@ axi {
 
 
 /delete-node/ &uart1;
-/*
+/delete-node/ &max7301_spi_0;
+/delete-node/ &AD3552_SPI_A;
+/delete-node/ &AD3552_SPI_B;
+
+
 /delete-node/ &axi_gpio_0;
 /delete-node/ &axi_timer_0;
 /delete-node/ &regbank_0;
-*/
+/delete-node/ &r5_sleep_timer_0;
 
+/*
 &axi_gpio_0 {
             /delete-property/ interrupt-controller ;
             /delete-property/ interrupt-names ;
@@ -75,4 +81,4 @@ axi {
              /delete-property/ interrupts ;
              status = "disabled";
              };
-
+*/

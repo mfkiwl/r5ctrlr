@@ -1,9 +1,13 @@
 //
-// R5 demo application
+// R5 integrated controller 
+// ZCU102 + ADI CN0585/CN0584
+//
 // IRQs from PL and 
 // interproc communications with A53/linux
 //
-// this is the R5 side
+//////////////////////////////////////////
+//
+// this is the R5 main side
 //
 
 #ifndef MAIN_H_
@@ -32,6 +36,9 @@
 #include <openamp/version.h>
 #include <metal/version.h>
 #include "rsc_table.h"
+#include "max7301.h"
+#include "ad3552.h"
+#include "adaq23876.h"
 
 //---------- openamp stuff  ------------------------
 #define IPI_DEV_NAME         "poll_dev"
@@ -63,22 +70,27 @@
 #define TIMER_DEVICE_ID        0
 // AXI timer has 2 timers; we only use the first one, timer#0
 #define TIMER_NUMBER           0
+
 // frequency of the timer interrupt:
-#define TIMER_FREQ_HZ          1
+#define TIMER_FREQ_HZ          10000
 // #defines for IRQ counter
 #define TIMER_IRQ_CNTR     0
 #define GPIO_IRQ_CNTR      1
 #define REGBANK_IRQ_CNTR   2
 #define IPI_CNTR           3
 
+// #defines for time profiling table
+//#define PROFILE
+#define PROFILE_TIME_ENTRIES    10
+#define PROFTIME_AVG             0
+#define PROFTIME_AVG2            1
+#define PROFTIME_MIN             2
+#define PROFTIME_MAX             3
+#define PROFTIME_N               4
+
+
 
 // ##########  types  #######################
-typedef struct
-  {
-  float param1;
-  int param2;
-  } LOOP_PARAM_MSG_TYPE;
-
 
 // ##########  extern globals  ################
 
@@ -94,6 +106,7 @@ void RegbankISR(void *CallbackRef);
 void GpioISR(void *CallbackRef);
 //static void TimerISR(void *callbackRef, u8 timer_num);
 void FiqHandler(void *cb) __attribute__((section(".tcmb_text")));
+static inline double GetTimer_us(void);
 int SetupAXIGPIO(void);
 int SetupAXItimer(void);
 int SetupIRQs(void);
@@ -102,6 +115,8 @@ int SetupSystem(void **platformp);
 int CleanupSystem(void *platform);
 void SetupExceptions(void);
 static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index);
+void ResetTimeTable(void);
+void AddTimeToTable(int theindex, double thetime);
 int main(void);
 
 

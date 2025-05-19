@@ -31,4 +31,13 @@
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"
 
 
+// ##########  types  #######################
+typedef struct
+  {
+  float freqHz;
+  int   percentAmplitude;
+  float constValVolt;
+  } LOOP_PARAM_MSG_TYPE;
+
+
 #endif

@@ -1,4 +1,4 @@
-OBJ_LOCAL = r5_main.o 
+OBJ_LOCAL = r5_main.o max7301.o ad3552.o adaq23876.o
 COMMON_DIR = ../common
 OBJ_COMMON = platform.o rproc.o rsc_table.o
 TARGET = R5app.elf
