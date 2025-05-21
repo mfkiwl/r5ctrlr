@@ -1,6 +1,6 @@
 OBJ_LOCAL = linux_main.o 
 COMMON_DIR = ../common
-OBJ_COMMON = platform.o rproc.o rsc_table.o
+OBJ_COMMON = platform.o rproc.o rsc_table.o sample_shmem.o
 TARGET = A53app.elf
 SYSROOT_PATH = /xilinxworks/ZCU102/v2024.2/r5ctrlr/r5ctrlr/sysroot/sysroots/cortexa72-cortexa53-xilinx-linux
 

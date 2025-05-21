@@ -36,6 +36,7 @@
 #include <openamp/version.h>
 #include <metal/version.h>
 #include "rsc_table.h"
+#include "sample_shmem.h"
 #include "max7301.h"
 #include "ad3552.h"
 #include "adaq23876.h"

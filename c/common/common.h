@@ -21,6 +21,9 @@
 #define LPRINTF(format, ...) xil_printf(format, ##__VA_ARGS__)
 #else
 // ########### linux side
+#define XST_SUCCESS                     0L
+#define XST_FAILURE                     1L
+
 #define LPRINTF(format, ...) printf(format, ##__VA_ARGS__)
 #endif
 

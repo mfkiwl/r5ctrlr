@@ -597,6 +597,18 @@ int SetupSystem(void **platformp)
     }
   LPRINTF("created rpmsg endpoint\n\r");
 
+  // init shared memory for ADC samples
+  status = InitSampleShmem();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in ADC sample shared memory initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("ADC sample shared memory successfully initialized\r\n");
+    }
+
   // setup analog card (ADI CN0585)
   status = InitMAX7301();
   if(status!=XST_SUCCESS)
@@ -840,6 +852,10 @@ int main()
       currtimer_us=GetTimer_us();
       AddTimeToTable(PROFILE_TIME_ENTRIES-1,currtimer_us);
       #endif
+
+      // write something in ADCsample shared memory
+      // for debug I write the number of timer IRQs at offset 0
+      metal_io_write32(sample_shmem_io, 0, irq_cntr[TIMER_IRQ_CNTR]);
 
       // every now and then print something
       if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= TIMER_FREQ_HZ)

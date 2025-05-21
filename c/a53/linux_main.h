@@ -18,6 +18,7 @@
 #include "rproc.h"
 #include <string.h>
 #include "common.h"
+#include "sample_shmem.h"
 
 #define IPI_DEV_NAME        "ff340000.ipi"
 #define IPI_CHN_BITMASK     0x00000100

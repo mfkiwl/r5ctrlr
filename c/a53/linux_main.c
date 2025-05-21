@@ -177,6 +177,19 @@ int SetupSystem(void **platformp)
 		platform_poll(platform);
 
 	LPRINTF("RPMSG endpoint is binded with remote.\r\n");
+
+  // init shared memory for ADC samples
+  status = InitSampleShmem();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in ADC sample shared memory initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("ADC sample shared memory successfully initialized\r\n");
+    }
+  
   return 0;
   }
 
@@ -203,6 +216,7 @@ int main(int argc, char *argv[])
   {
   int status, theAmp, numbytes, msglen;
   float theFreq, theVolt;
+  unsigned long numIRQ;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -226,6 +240,10 @@ int main(int argc, char *argv[])
   msglen=sizeof(LOOP_PARAM_MSG_TYPE);
   while(1)
     {
+    // for debug, read number of timer IRQ from ADCsample shared memory offset 0 and print it
+    numIRQ=metal_io_read32(sample_shmem_io, 0);
+    LPRINTF("# of Timer IRQs: %d\r\n", numIRQ);
+
     LPRINTF("Enter frequency (Hz, float)               : ");
     status=scanf("%f", &theFreq);
     if(status<1)
