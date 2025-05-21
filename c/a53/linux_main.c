@@ -205,6 +205,7 @@ int CleanupSystem(void *platform)
   release_rpmsg_vdev(rpdev, platform);
   if(rproc)
     remoteproc_remove(rproc);
+  ReleaseSampleShmem();
   metal_finish();
   return 0;
   }

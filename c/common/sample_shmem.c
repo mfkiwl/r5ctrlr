@@ -74,3 +74,12 @@ int InitSampleShmem(void)
 
   return XST_SUCCESS;
   }
+
+
+// -----------------------------------------------------------
+
+void ReleaseSampleShmem(void)
+  {
+  if(sample_shmem_dev!=NULL)
+    metal_device_close(sample_shmem_dev);
+  }

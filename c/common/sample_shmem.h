@@ -46,5 +46,6 @@ extern struct metal_io_region *sample_shmem_io;
 
 // ##########  protos  ########################
 int InitSampleShmem(void);
+void ReleaseSampleShmem(void);
 
 #endif
