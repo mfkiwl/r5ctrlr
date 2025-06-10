@@ -1,18 +1,13 @@
 //
-// R5 demo application
+// R5 integrated controller 
+// ZCU102 + ADI CN0585/CN0584
+//
 // IRQs from PL and 
 // interproc communications with A53/linux
 //
+//////////////////////////////////////////
+//
 // this is the linux/A53 side
-//
-// features:
-//    - IRQ from register bank
-//    - IRQ from AXI GPIO
-//    - IRQ from AXI timer
-//    - readout register in register bank
-//    - get parameters from linux
-//
-// latest rev: nov 5 2024
 //
 
 #include "linux_main.h"
@@ -215,58 +210,129 @@ int CleanupSystem(void *platform)
 
 int main(int argc, char *argv[])
   {
-  int status, theAmp, numbytes, msglen;
-  float theFreq, theVolt;
+  int status, numbytes, rpmsglen;
+//  int theAmp;
+//  float theFreq, theVolt;
   unsigned long numIRQ;
-
+  int sock, maxfd, newfd;
+  int i, nready;
+  fd_set active_fd_set, read_fd_set;
+  struct sockaddr_in clientname;
+  size_t size;
+  
   // remove buffering from stdin and stdout
-  setvbuf (stdout, NULL, _IONBF, 0);
-  setvbuf (stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stdin,  NULL, _IONBF, 0);
 
-  LPRINTF("\nR5 test application #5 : shared PL resources + IRQs + IPC (openamp)\n\n");
-#ifdef ARMR5
-  LPRINTF("This is R5/baremetal side\n\n");
-#else
-  LPRINTF("This is A53/linux side\n\n");
-#endif
+  LPRINTF("\r\nR5 test application #5 : shared PL resources + IRQs + IPC (openamp)\r\n\r\n");
+  LPRINTF("This is A53/linux side\r\n\r\n");
 
   status = SetupSystem(&platform);
   if(status!=0)
     {
-    LPRINTF("ERROR Setting up System - aborting\n");
+    LPRINTF("ERROR Setting up System - aborting\r\n");
     return status;
     }
 
+  status = startSCPIserver(&sock, &active_fd_set);
+  if(status!=SCPI_NO_ERR)
+    {
+    LPRINTF("ERROR Setting up SCPI server - aborting\r\n");
+    return status;
+    }
+  maxfd = sock;
+  rpmsglen=sizeof(LOOP_PARAM_MSG_TYPE);
+
   // main loop
-  msglen=sizeof(LOOP_PARAM_MSG_TYPE);
+
   while(1)
     {
-    // for debug, read number of timer IRQ from ADCsample shared memory offset 0 and print it
-    numIRQ=metal_io_read32(sample_shmem_io, 0);
-    LPRINTF("# of Timer IRQs: %d\r\n", numIRQ);
-
-    LPRINTF("Enter frequency (Hz, float)               : ");
-    status=scanf("%f", &theFreq);
-    if(status<1)
-      break;
-    LPRINTF("Enter amplitude (%% full scale, signed int): ");
-    status=scanf("%d", &theAmp);
-    if(status<1)
-      break;
-    LPRINTF("Enter constant DAC#4 value (volt, float)  : ");
-    status=scanf("%f", &theVolt);
-    if(status<1)
-      break;
-    // send new parameters to R5
-    gMsgPtr->freqHz=theFreq;
-    gMsgPtr->percentAmplitude=theAmp;
-    gMsgPtr->constValVolt=theVolt;
-    numbytes= rpmsg_send(&lept, gMsgPtr, msglen);
-    if(numbytes<msglen)
-      LPRINTF("ERROR sending RPMSG\n");
+    // block until input arrives on one or more active sockets
+    //LPRINTF("Listening\r\n");
+    read_fd_set = active_fd_set;
+    nready=select(maxfd+1, &read_fd_set, NULL, NULL, NULL);
+    if(nready<0)
+      {
+      LPRINTF("select() error\r\n");
+      }
     else
-      LPRINTF("Successfully sent RPMSG\n");
-    }
+      {
+      // service all the sockets with input pending
+      for(i=0; i<=maxfd && nready>0; i++)
+        {
+        if(FD_ISSET(i, &read_fd_set))
+          {
+          nready--;
+          if(i == sock)
+            {
+            // new connection request on original socket
+            size = sizeof(clientname);
+            newfd = accept(sock,
+                          (struct sockaddr *) &clientname,
+                          (socklen_t * restrict) &size);
+            if(newfd < 0)
+              {
+              LPRINTF("accept() error\r\n");
+              }
+            else
+              {
+              LPRINTF("SCPI server: new connection from host %s, port %hd\r\n",
+                     inet_ntoa(clientname.sin_addr),
+                     ntohs(clientname.sin_port));
+              FD_SET(newfd, &active_fd_set);
+              if(newfd>maxfd)
+                {
+                maxfd=newfd;
+                }
+              }
+            }    // if new connection
+            else
+            {
+            // data arriving on an already-connected socket
+            //fprintf(stderr,"Incoming data\n");
+            if(SCPI_read_from_client(i) < 0)
+              {
+              LPRINTF("Closing connection\r\n");
+              close(i);
+              FD_CLR(i, &active_fd_set);
+              // I don't update maxfd; I should loop on the fd set to find the new maximum: not worth
+              }
+            }    // if data from already-connected client
+          }    // if input pending
+        }    // loop on FD set
+      }    // if not select() error
+    }    // while 1
+
+
+
+  // while(1)
+  //   {
+  //   // for debug, read number of timer IRQ from ADCsample shared memory offset 0 and print it
+  //   numIRQ=metal_io_read32(sample_shmem_io, 0);
+  //   LPRINTF("# of Timer IRQs: %d\r\n", numIRQ);
+
+  //   LPRINTF("Enter frequency (Hz, float)               : ");
+  //   status=scanf("%f", &theFreq);
+  //   if(status<1)
+  //     break;
+  //   LPRINTF("Enter amplitude (%% full scale, signed int): ");
+  //   status=scanf("%d", &theAmp);
+  //   if(status<1)
+  //     break;
+  //   LPRINTF("Enter constant DAC#4 value (volt, float)  : ");
+  //   status=scanf("%f", &theVolt);
+  //   if(status<1)
+  //     break;
+  //   // send new parameters to R5
+  //   gMsgPtr->freqHz=theFreq;
+  //   gMsgPtr->percentAmplitude=theAmp;
+  //   gMsgPtr->constValVolt=theVolt;
+  //   numbytes= rpmsg_send(&lept, gMsgPtr, rpmsglen);
+  //   if(numbytes<rpmsglen)
+  //     LPRINTF("ERROR sending RPMSG\n");
+  //   else
+  //     LPRINTF("Successfully sent RPMSG\n");
+  //   }
   
   // cleanup and exit
   LPRINTF("\nExiting\n");
