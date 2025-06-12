@@ -16,8 +16,8 @@
 
 void *platform;
 // openamp
-static struct rpmsg_endpoint lept;
-static LOOP_PARAM_MSG_TYPE *gMsgPtr;
+RPMSG_ENDP_TYPE endp;
+R5_RPMSG_TYPE *gMsgPtr;
 struct rpmsg_device *rpdev;
 static struct remoteproc rproc_inst;
 static int ept_deleted = 0;
@@ -50,7 +50,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 static void rpmsg_service_unbind(struct rpmsg_endpoint *ept)
   {
   (void)ept;
-  rpmsg_destroy_ept(&lept);
+  rpmsg_destroy_ept(&endp);
   LPRINTF("rpmsg service is destroyed\n");
   ept_deleted = 1;
   }
@@ -61,7 +61,7 @@ static void rpmsg_name_service_bind_cb(struct rpmsg_device *rdev, const char *na
   if (strcmp(name, RPMSG_SERVICE_NAME))
     LPERROR("Unexpected name service %s.\n", name);
   else
-    (void)rpmsg_create_ept(&lept, rdev, 
+    (void)rpmsg_create_ept(&endp, rdev, 
                            RPMSG_SERVICE_NAME, RPMSG_ADDR_ANY, dest, 
                            rpmsg_endpoint_cb, rpmsg_service_unbind);
   }
@@ -140,13 +140,13 @@ int SetupSystem(void **platformp)
   
   LPRINTF("Allocating msg buffer\n");
   max_size = rpmsg_virtio_get_buffer_size(rpdev);
-  if(max_size < sizeof(LOOP_PARAM_MSG_TYPE))
+  if(max_size < sizeof(R5_RPMSG_TYPE))
     {
     LPERROR("too small buffer size.\r\n");
     return -1;
     }
 
-  gMsgPtr = (LOOP_PARAM_MSG_TYPE *)metal_allocate_memory(sizeof(LOOP_PARAM_MSG_TYPE));
+  gMsgPtr = (R5_RPMSG_TYPE *)metal_allocate_memory(sizeof(R5_RPMSG_TYPE));
 
   if(!gMsgPtr)
     {
@@ -155,7 +155,7 @@ int SetupSystem(void **platformp)
     }
 
   LPRINTF("Try to create rpmsg endpoint.\n");
-  status = rpmsg_create_ept(&lept, rpdev, RPMSG_SERVICE_NAME,
+  status = rpmsg_create_ept(&endp, rpdev, RPMSG_SERVICE_NAME,
                             RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
                             rpmsg_endpoint_cb,
                             rpmsg_service_unbind);
@@ -168,7 +168,7 @@ int SetupSystem(void **platformp)
   LPRINTF("Successfully created rpmsg endpoint.\n");
 
   LPRINTF("Waiting for remote answer...\n");
-	while(!is_rpmsg_ept_ready(&lept))
+	while(!is_rpmsg_ept_ready(&endp))
 		platform_poll(platform);
 
 	LPRINTF("RPMSG endpoint is binded with remote.\r\n");
@@ -195,7 +195,7 @@ int CleanupSystem(void *platform)
   {
   struct remoteproc *rproc = platform;
 
-  rpmsg_destroy_ept(&lept);
+  rpmsg_destroy_ept(&endp);
   metal_free_memory(gMsgPtr);
   release_rpmsg_vdev(rpdev, platform);
   if(rproc)
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
     return status;
     }
   maxfd = sock;
-  rpmsglen=sizeof(LOOP_PARAM_MSG_TYPE);
+  rpmsglen=sizeof(R5_RPMSG_TYPE);
 
   // main loop
 
@@ -290,7 +290,7 @@ int main(int argc, char *argv[])
             {
             // data arriving on an already-connected socket
             //fprintf(stderr,"Incoming data\n");
-            if(SCPI_read_from_client(i) < 0)
+            if(SCPI_read_from_client(i, &endp, gMsgPtr) < 0)
               {
               LPRINTF("Closing connection\r\n");
               close(i);
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
   //   gMsgPtr->freqHz=theFreq;
   //   gMsgPtr->percentAmplitude=theAmp;
   //   gMsgPtr->constValVolt=theVolt;
-  //   numbytes= rpmsg_send(&lept, gMsgPtr, rpmsglen);
+  //   numbytes= rpmsg_send(&endp, gMsgPtr, rpmsglen);
   //   if(numbytes<rpmsglen)
   //     LPRINTF("ERROR sending RPMSG\n");
   //   else

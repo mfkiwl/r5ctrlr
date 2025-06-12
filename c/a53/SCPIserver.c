@@ -52,7 +52,7 @@ void trimstring(char* s)
 
 //-------------------------------------------------------------------
 
-void parseIDN(char *ans, size_t maxlen)
+void parse_IDN(char *ans, size_t maxlen)
   {
   FILE *fd;
   char prod[SCPI_MAXMSG+1], ver[SCPI_MAXMSG+1];
@@ -90,7 +90,7 @@ void parseIDN(char *ans, size_t maxlen)
 
 //-------------------------------------------------------------------
 
-void parseSTB(char *ans, size_t maxlen)
+void parse_STB(char *ans, size_t maxlen)
   {
    snprintf(ans, maxlen, 
             "%s: ciccibum\n", SCPI_OKS
@@ -100,9 +100,68 @@ void parseSTB(char *ans, size_t maxlen)
 
 //-------------------------------------------------------------------
 
-void parseRST(char *ans, size_t maxlen)
+void parse_RST(char *ans, size_t maxlen)
   {
   snprintf(ans, maxlen, "%s: pippo pluto paperino\n", SCPI_OKS);        
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_WRITE_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int n,nch, dac[4];
+  int numbytes, rpmsglen;
+
+  
+  if(rw==SCPI_READ)
+    {
+    snprintf(ans, maxlen, "%s: read operation not supported\n", SCPI_ERRS);
+    }
+  else
+    {
+    // parse the values to write into the 4 DAC channels;
+    // format is 16 bit 2's complement int, written in decimal
+    nch=0;
+    do
+      {
+      // next in line is the desired value for nex DAC channel
+      p=strtok(NULL," ");
+      if(p!=NULL)
+        {
+        n=(int)strtol(p, NULL, 10);
+        if(errno!=0 && n==0)
+          {
+          snprintf(ans, maxlen, "%s: invalid DAC value\n", SCPI_ERRS);
+          p=NULL;     // to break out of do..while cycle
+          }
+        else
+          {
+          dac[nch++]=n;
+          }
+        }      
+      } 
+    while((p!=NULL) && (nch<4));
+
+    // now send the new values to R5
+    if((p!=NULL) && (nch=4))
+      {
+      rpmsglen=sizeof(R5_RPMSG_TYPE);
+      rpmsg_ptr->command = RPMSGCMD_WRITE_DAC;
+      rpmsg_ptr->data[0]=((u32)(dac[1])<<16)&0xFFFF0000 | ((u32)(dac[0]))&0x0000FFFF;
+      rpmsg_ptr->data[1]=((u32)(dac[3])<<16)&0xFFFF0000 | ((u32)(dac[2]))&0x0000FFFF;
+      numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+      if(numbytes<rpmsglen)
+        snprintf(ans, maxlen, "%s: rpmsg_send() failed\n", SCPI_ERRS);
+      else
+        snprintf(ans, maxlen, "%s: DAC updated (%d %d %d %d)\n", SCPI_OKS, dac[0], dac[1], dac[2], dac[3]);
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing DAC channel value\n", SCPI_ERRS);
+      }
+    }
   }
 
 
@@ -125,7 +184,7 @@ void printHelp(int filedes)
 
 //-------------------------------------------------------------------
 
-void parse(char *buf, char *ans, size_t maxlen, int filedes)
+void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
   int rw;
@@ -149,11 +208,13 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes)
 
   // serve the right command
   if(strcmp(p,"*IDN")==0)
-    parseIDN(ans, maxlen);
+    parse_IDN(ans, maxlen);
   else if(strcmp(p,"*STB")==0)
-    parseSTB(ans, maxlen);
+    parse_STB(ans, maxlen);
   else if(strcmp(p,"*RST")==0)
-    parseRST(ans, maxlen);
+    parse_RST(ans, maxlen);
+  else if(strcmp(p,"DAC")==0)
+    parse_WRITE_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);
@@ -176,7 +237,7 @@ void sendback(int filedes, char *s)
 
 //-------------------------------------------------------------------
 
-int SCPI_read_from_client(int filedes)
+int SCPI_read_from_client(int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char buffer[SCPI_MAXMSG+1];    // "+1" to add zero-terminator
   char answer[SCPI_MAXMSG+1];
@@ -199,7 +260,7 @@ int SCPI_read_from_client(int filedes)
     // data read
     buffer[nbytes]=0;    // add string zero terminator
     //fprintf(stderr, "Incoming msg: '%s'\n", buffer);
-    parse(buffer, answer, SCPI_MAXMSG, filedes);
+    parse(buffer, answer, SCPI_MAXMSG, filedes, endp_ptr, rpmsg_ptr);
     sendback(filedes, answer);
     return 0;
     }

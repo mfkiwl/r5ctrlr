@@ -22,7 +22,7 @@ void *platform;
 // openamp
 static struct rpmsg_endpoint lept;
 static int shutdown_req = 0;
-static LOOP_PARAM_MSG_TYPE gLoopParameters;
+//static LOOP_PARAM_TYPE gLoopParameters;
 struct rpmsg_device *rpdev;
 
 // Polling information used by remoteproc operations.
@@ -77,6 +77,8 @@ double g2pi, gPhase, gdPhase, gFreq, gAmpl, gDCval, g_x[4], g_y[4];
 // entries are <x>, <x^2>, min, max, N_entries
 double time_table[PROFILE_TIME_ENTRIES][5];
 
+int gR5ctrlState;
+
 
 // ##########  implementation  ################
 
@@ -87,16 +89,40 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)src;    // avoid warning on unused parameter
   (void)ept;    // avoid warning on unused parameter
 
+  u32 cmd, d;
+
   // update the total number of received messages, for debug purposes
   irq_cntr[IPI_CNTR]++;
 
-  // use msg to update parameters
-  if(len<sizeof(LOOP_PARAM_MSG_TYPE))
+  if(len<sizeof(R5_RPMSG_TYPE))
     {
     LPRINTF("incomplete message received.\n\r");
     return RPMSG_ERR_BUFF_SIZE;
     }
-  memcpy(&gLoopParameters, data, sizeof(LOOP_PARAM_MSG_TYPE));
+
+  cmd=((R5_RPMSG_TYPE*)data)->command;
+
+  switch(cmd)
+    {
+    // update DAC content with values requested by linux
+    case RPMSGCMD_WRITE_DAC:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      g_y[0]=((s16)(d&0x0000FFFF)) / 32768.;
+      g_y[1]=((s16)((d>>16)&0x0000FFFF)) / 32768.;
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      g_y[2]=((s16)(d&0x0000FFFF)) / 32768.;
+      g_y[3]=((s16)((d>>16)&0x0000FFFF)) / 32768.;
+      break;
+    }
+
+  // // use msg to update parameters
+  // if(len<sizeof(LOOP_PARAM_MSG_TYPE))
+  //   {
+  //   LPRINTF("incomplete message received.\n\r");
+  //   return RPMSG_ERR_BUFF_SIZE;
+  //   }
+  // memcpy(&gLoopParameters, data, sizeof(LOOP_PARAM_MSG_TYPE));
+
   return RPMSG_SUCCESS;
 }
 
@@ -733,20 +759,18 @@ int main()
   for(i=0; i<4; i++)
     irq_cntr[i]=0;
 
-  // init sample loop parameters
-  gLoopParameters.freqHz=1000.f;
-  gLoopParameters.percentAmplitude=75;
-  gLoopParameters.constValVolt=3.5f;
+  gR5ctrlState=R5CTRLR_IDLE;
+
+  // // init sample loop parameters
+  // gLoopParameters.freqHz=1000.f;
+  // gLoopParameters.percentAmplitude=75;
+  // gLoopParameters.constValVolt=3.5f;
 
   // init profiling time table
   ResetTimeTable();
 
   LPRINTF("\n\r*** R5 integrated controller ***\n\r\n\r");
-#ifdef ARMR5
   LPRINTF("This is R5/baremetal side\n\r\n\r");
-#else
-  LPRINTF("This is A53/linux side\n\r\n\r");
-#endif
 
   LPRINTF("openamp lib version: %s (", openamp_version());
   LPRINTF("Major: %d, ", openamp_version_major());
@@ -766,7 +790,7 @@ int main()
     }
 
   g2pi=8.*atan(1.);
-  gPhase=0.0;
+//  gPhase=0.0;
   
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
@@ -810,32 +834,33 @@ int main()
       #endif
 
       // do something...
-      
-      // read ADCs with fullscale = 1.0
+
+      // read ADCs into raw (adcval[i]) and with fullscale = 1.0 (g_x[i])
       ReadADCs(adcval);
       for(i=0; i<4; i++)
         g_x[i]=adcval[i]/ADAQ23876_FULLSCALE_CNT;
 
-      // workout next DAC value
-      gFreq=gLoopParameters.freqHz;
-      gAmpl=gLoopParameters.percentAmplitude*0.01;
-      gDCval=gLoopParameters.constValVolt;
-      gdPhase= g2pi*gFreq/(double)(TIMER_FREQ_HZ);
-      gPhase += gdPhase;
-      if(gPhase>g2pi)
-        gPhase -= g2pi;
-      // work out next DAC values with fullscale = 1.0
-      g_y[0]=gAmpl*sin(gPhase);
-      g_y[1]=gAmpl*cos(gPhase);
-      g_y[2]=gAmpl*sin(2.*gPhase);
-      g_y[3]=gDCval/AD3552_FULLSCALE_VOLT;
+      switch(gR5ctrlState)
+        {
+        case R5CTRLR_IDLE:
+          break;
+        }
+      
 
-      // DAC AD3552 is offset binary;
-      // usual conversion from 2's complement is done inverting the MSB,
-      // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
-      // so I just scale and offset at the end, which is clearer
-      for(i=0; i<4; i++)
-        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
+      // // workout next DAC value
+      // gFreq=gLoopParameters.freqHz;
+      // gAmpl=gLoopParameters.percentAmplitude*0.01;
+      // gDCval=gLoopParameters.constValVolt;
+      // gdPhase= g2pi*gFreq/(double)(TIMER_FREQ_HZ);
+      // gPhase += gdPhase;
+      // if(gPhase>g2pi)
+      //   gPhase -= g2pi;
+      // // work out next DAC values with fullscale = 1.0
+      // g_y[0]=gAmpl*sin(gPhase);
+      // g_y[1]=gAmpl*cos(gPhase);
+      // g_y[2]=gAmpl*sin(2.*gPhase);
+      // g_y[3]=gDCval/AD3552_FULLSCALE_VOLT;
+
 
       // register time of end of sine wave calculation
       #ifdef PROFILE
@@ -843,6 +868,15 @@ int main()
       AddTimeToTable(2,currtimer_us);
       #endif
 
+      // write DACs from values with fullscale = 1 (g_y[i]) into raw (dacval[i])
+
+      // DAC AD3552 is offset binary;
+      // usual conversion from 2's complement is done inverting the MSB,
+      // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
+      // so I just scale and offset at the end, which is clearer
+      for(i=0; i<4; i++)
+        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
+      
       status = WriteDacSamples(0,dacval[0], dacval[1]);
       status = WriteDacSamples(1,dacval[2], dacval[3]);
       // DAC output will be updated by hardware /LDAC pulse on next cycle 
@@ -857,14 +891,14 @@ int main()
 
       // write something in ADCsample shared memory
       // for debug I write the number of timer IRQs at offset 0
-      metal_io_write32(sample_shmem_io, 0, irq_cntr[TIMER_IRQ_CNTR]);
+      // metal_io_write32(sample_shmem_io, 0, irq_cntr[TIMER_IRQ_CNTR]);
 
       // every now and then print something
       if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= TIMER_FREQ_HZ)
         {
         last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
 
-        // print ADC values in volt
+        // print ADC values
         for(i=0; i<4; i++)
           // LPRINTF("ADC#%d = %3d.%03d ",
           //         i,

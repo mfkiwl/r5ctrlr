@@ -24,6 +24,8 @@
 #define XST_SUCCESS                     0L
 #define XST_FAILURE                     1L
 
+typedef __uint32_t u32;
+
 #define LPRINTF(format, ...) printf(format, ##__VA_ARGS__)
 #endif
 
@@ -33,14 +35,29 @@
 //---------- openamp stuff -------------------------
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"
 
+// commands from linux to R5
+#define RPMSGCMD_NOP        0
+#define RPMSGCMD_WRITE_DAC  1
+#define RPMSGCMD_READ_ADC   2
+
 
 // ##########  types  #######################
+// typedef struct
+//   {
+//   float freqHz;
+//   int   percentAmplitude;
+//   float constValVolt;
+//   } LOOP_PARAM_MSG_TYPE;
+
+typedef struct rpmsg_endpoint RPMSG_ENDP_TYPE;
+
 typedef struct
   {
-  float freqHz;
-  int   percentAmplitude;
-  float constValVolt;
-  } LOOP_PARAM_MSG_TYPE;
+  u32 command;
+  u32 option;
+  u32 data[122];
+  } R5_RPMSG_TYPE;
+
 
 
 #endif

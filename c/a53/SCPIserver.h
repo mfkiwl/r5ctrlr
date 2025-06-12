@@ -30,6 +30,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <math.h>
+#include <openamp/open_amp.h>
 #include "common.h"
 
 
@@ -55,12 +56,13 @@
 // ##########  protos  ########################
 void         upstring(char *s);
 void         trimstring(char* s);
-void         parseIDN(char *ans, size_t maxlen);
-void         parseSTB(char *ans, size_t maxlen);
-void         parseRST(char *ans, size_t maxlen);
+void         parse_IDN(char *ans, size_t maxlen);
+void         parse_STB(char *ans, size_t maxlen);
+void         parse_RST(char *ans, size_t maxlen);
+void         parse_WRITE_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void         printHelp(int filedes);
-void         parse(char *buf, char *ans, size_t maxlen, int filedes);
+void         parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void         sendback(int filedes, char *s);
-int          SCPI_read_from_client(int filedes);
+int          SCPI_read_from_client(int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 int          startSCPIserver(int *sock_ptr, fd_set *active_fd_set_ptr);
 #endif
