@@ -191,6 +191,78 @@ void parse_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
 
 //-------------------------------------------------------------------
 
+void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,dacvalue;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    snprintf(ans, maxlen, "%s: read operation not supported; use DAC? instead\n", SCPI_ERRS);
+    }
+  else
+    {
+    // parse the values to write into one specific DAC channel;
+    // format is 16 bit 2's complement int, written in decimal
+
+    // next in line is the desired DAC channel
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      nch=(int)strtol(p, NULL, 10);
+      if(errno!=0 && nch==0)
+        {
+        snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+        }
+      else
+        {
+        if((nch<1)||(nch>4))
+          {
+          snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+          }
+        else
+          {
+          // next in line is the DAC value
+          p=strtok(NULL," ");
+          if(p!=NULL)
+            {
+            dacvalue=(int)strtol(p, NULL, 10);
+            if(errno!=0 && dacvalue==0)
+              {
+              snprintf(ans, maxlen, "%s: invalid DAC value\n", SCPI_ERRS);
+              }
+            else
+              {
+              // everything is ready: send rpmsg to R5
+              rpmsglen=sizeof(R5_RPMSG_TYPE);
+              rpmsg_ptr->command = RPMSGCMD_WRITE_DACCH;
+              rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(dacvalue))&0x0000FFFF;
+              numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+              if(numbytes<rpmsglen)
+                snprintf(ans, maxlen, "%s: DACCH WRITE rpmsg_send() failed\n", SCPI_ERRS);
+              else
+                snprintf(ans, maxlen, "%s: DAC CH %d updated with value %d\n", SCPI_OKS, nch, dacvalue);
+              }
+            }
+          else
+            {
+            snprintf(ans, maxlen, "%s: missing DAC value\n", SCPI_ERRS);
+            }
+          }
+        }
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing DAC channel\n", SCPI_ERRS);
+      }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -283,6 +355,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_RST(ans, maxlen);
   else if(strcmp(p,"DAC")==0)
     parse_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"DACCH")==0)
+    parse_DACCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)

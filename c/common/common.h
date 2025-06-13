@@ -37,10 +37,11 @@ typedef    int16_t s16;
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"
 
 // commands from linux to R5
-#define RPMSGCMD_NOP        0
-#define RPMSGCMD_WRITE_DAC  1
-#define RPMSGCMD_READ_DAC   2
-#define RPMSGCMD_READ_ADC   3
+#define RPMSGCMD_NOP          0
+#define RPMSGCMD_WRITE_DAC    1
+#define RPMSGCMD_READ_DAC     2
+#define RPMSGCMD_WRITE_DACCH  3
+#define RPMSGCMD_READ_ADC     4
 
 
 // ##########  types  #######################

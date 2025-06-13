@@ -87,7 +87,8 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)ept;    // avoid warning on unused parameter
 
   u32 cmd, d;
-  int numbytes, rpmsglen, ret;
+  int numbytes, rpmsglen, ret, nch;
+  double dval;
 
   // update the total number of received messages, for debug purposes
   irq_cntr[IPI_CNTR]++;
@@ -104,7 +105,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   
   switch(cmd)
     {
-    // update DAC content with values requested by linux
+    // update all DAC channels with the values requested by linux
     case RPMSGCMD_WRITE_DAC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
       g_y[0]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
@@ -112,6 +113,17 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       d=((R5_RPMSG_TYPE*)data)->data[1];
       g_y[2]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
       g_y[3]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
+      break;
+
+    // update only one DAC channel with the value requested by linux
+    case RPMSGCMD_WRITE_DACCH:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      dval=((s16)(d&0x0000FFFF)) / (1.0*AD3552_AMPL);
+      nch=(d>>16)&0x0000FFFF;
+      if((nch>=1)&&(nch<=4))
+        g_y[nch-1]=dval;
+      else
+        return RPMSG_ERR_PARAM;
       break;
 
     // read back DAC values to linux
