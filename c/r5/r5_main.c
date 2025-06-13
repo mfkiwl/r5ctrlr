@@ -9,16 +9,13 @@
 //
 // this is the R5 main side
 //
-//
-// latest rev: mar 6 2025
-//
 
 #include "r5_main.h"
 
 
 // ##########  globals  #######################
 
-void *platform;
+void *gplatform;
 // openamp
 static struct rpmsg_endpoint lept;
 static int shutdown_req = 0;
@@ -90,18 +87,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)ept;    // avoid warning on unused parameter
 
   u32 cmd, d;
+  int numbytes, rpmsglen, ret;
 
   // update the total number of received messages, for debug purposes
   irq_cntr[IPI_CNTR]++;
 
-  if(len<sizeof(R5_RPMSG_TYPE))
+  rpmsglen=sizeof(R5_RPMSG_TYPE);
+
+  if(len<rpmsglen)
     {
     LPRINTF("incomplete message received.\n\r");
     return RPMSG_ERR_BUFF_SIZE;
     }
 
   cmd=((R5_RPMSG_TYPE*)data)->command;
-
+  
   switch(cmd)
     {
     // update DAC content with values requested by linux
@@ -113,6 +113,22 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       g_y[2]=((s16)(d&0x0000FFFF)) / 32768.;
       g_y[3]=((s16)((d>>16)&0x0000FFFF)) / 32768.;
       break;
+
+    // send current ADC values back to linux
+    case RPMSGCMD_READ_ADC:
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADC;
+      ((R5_RPMSG_TYPE*)data)->data[0] = ((((u32)adcval[1])<<16)&0xFFFF0000) | (((u32)adcval[0])&0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[1] = ((((u32)adcval[3])<<16)&0xFFFF0000) | (((u32)adcval[2])&0x0000FFFF);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
     }
 
   // // use msg to update parameters
@@ -610,7 +626,7 @@ int SetupSystem(void **platformp)
     LPERROR("Failed to create rpmsg virtio device\n\r");
     return XST_FAILURE;
     }
-  
+
   // init RPMSG framework
   status = rpmsg_create_ept(&lept, rpdev, RPMSG_SERVICE_NAME,
                             RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
@@ -782,7 +798,7 @@ int main()
   LPRINTF("Minor: %d, ", metal_ver_minor());
   LPRINTF("Patch: %d)\n\r", metal_ver_patch());
 
-  status = SetupSystem(&platform);
+  status = SetupSystem(&gplatform);
   if(status!=XST_SUCCESS)
     {
     LPRINTF("ERROR Setting up System - aborting\n\r");
@@ -815,7 +831,7 @@ int main()
 
     _rproc_wait();
     // check whether we have a message from A53/linux
-    (void)remoteproc_get_notification(platform, RSC_NOTIFY_ID_ANY);
+    (void)remoteproc_get_notification(gplatform, RSC_NOTIFY_ID_ANY);
 
     if(gTimerIRQoccurred!=0)
       {
@@ -940,7 +956,7 @@ int main()
 
   LPRINTF("\n\rExiting\n\r");
 
-  status = CleanupSystem(platform);
+  status = CleanupSystem(gplatform);
   if(status!=XST_SUCCESS)
     {
     LPRINTF("ERROR Cleaning up System\n\r");

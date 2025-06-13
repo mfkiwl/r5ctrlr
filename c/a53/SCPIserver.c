@@ -153,7 +153,7 @@ void parse_WRITE_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       rpmsg_ptr->data[1]=((u32)(dac[3])<<16)&0xFFFF0000 | ((u32)(dac[2]))&0x0000FFFF;
       numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
       if(numbytes<rpmsglen)
-        snprintf(ans, maxlen, "%s: rpmsg_send() failed\n", SCPI_ERRS);
+        snprintf(ans, maxlen, "%s: DAC WRITE rpmsg_send() failed\n", SCPI_ERRS);
       else
         snprintf(ans, maxlen, "%s: DAC updated (%d %d %d %d)\n", SCPI_OKS, dac[0], dac[1], dac[2], dac[3]);
       }
@@ -161,6 +161,50 @@ void parse_WRITE_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       {
       snprintf(ans, maxlen, "%s: missing DAC channel value\n", SCPI_ERRS);
       }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int n,nch, adc[4];
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_ADC;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: ADC READ rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      {
+      // now wait for answer
+      status=WaitForRpmsg();
+      switch(status)
+        {
+        case RPMSG_ANSWER_VALID:
+          snprintf(ans, maxlen, "%s: %d %d %d %d\n", SCPI_OKS, g_adcval[0], g_adcval[1], g_adcval[2], g_adcval[3]);
+          break;
+        case RPMSG_ANSWER_TIMEOUT:
+          snprintf(ans, maxlen, "%s: ADC READ timed out\n", SCPI_ERRS);
+          break;
+        case RPMSG_ANSWER_ERR:
+          snprintf(ans, maxlen, "%s: ADC READ error\n", SCPI_ERRS);
+          break;
+        }
+      }
+    }
+  else
+    {
+    snprintf(ans, maxlen, "%s: write operation not supported\n", SCPI_ERRS);
     }
   }
 
@@ -215,6 +259,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_RST(ans, maxlen);
   else if(strcmp(p,"DAC")==0)
     parse_WRITE_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"ADC")==0)
+    parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);

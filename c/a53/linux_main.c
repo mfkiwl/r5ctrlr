@@ -14,13 +14,18 @@
 
 // ##########  globals  #######################
 
-void *platform;
+void *gplatform;
 // openamp
 RPMSG_ENDP_TYPE endp;
 R5_RPMSG_TYPE *gMsgPtr;
 struct rpmsg_device *rpdev;
 static struct remoteproc rproc_inst;
 static int ept_deleted = 0;
+int gIncomingRpmsgs;
+
+s16 g_adcval[4];
+
+
 
 struct remoteproc_priv rproc_priv = 
   {
@@ -32,10 +37,50 @@ struct remoteproc_priv rproc_priv =
   };
 
 
+// ##########  implementation  ################
 
-// ------------ RPMSG endpoint callbacks ----------
+void FlushRpmsg(void)
+  {
+  // remove stale rpmsg in queue
+  do
+    {
+    gIncomingRpmsgs=0;
+    (void)remoteproc_get_notification(gplatform, RSC_NOTIFY_ID_ANY);
+    // the call to the callback increments gIncomingRpmsgs in case a msg was present
+    } while(gIncomingRpmsgs>0);
+  }
 
-// I don't expect any messages from R5
+
+// -----------------------------------------------------------
+
+int WaitForRpmsg(void)
+  {
+  int ret;
+  time_t startt, currt;
+  double dt;
+
+  time(&startt);
+  do
+    {
+    // release CPU and put this thread to the bottom of the scheduler list
+    metal_cpu_yield();
+    ret=remoteproc_get_notification(gplatform, RSC_NOTIFY_ID_ANY);
+    time(&currt);
+    dt=difftime(currt, startt);
+    } while((gIncomingRpmsgs==0) && (ret==0) && (dt<RPMSG_ANSWER_TIMEOUT_SEC));
+
+  if(dt>=RPMSG_ANSWER_TIMEOUT_SEC)
+    return RPMSG_ANSWER_TIMEOUT;
+  else if(ret!=0)
+    return RPMSG_ANSWER_ERR;
+  else
+    return RPMSG_ANSWER_VALID;
+  }
+
+
+// -----------------------------------------------------------
+
+// callback for messages from R5
 static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len, uint32_t src, void *priv)
   {
   (void)ept;    // avoid warning on unused parameter
@@ -44,8 +89,36 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)src;    // avoid warning on unused parameter
   (void)priv;   // avoid warning on unused parameter
 
+  u32 cmd, d;
+
+  gIncomingRpmsgs++;
+
+  if(len<sizeof(R5_RPMSG_TYPE))
+    {
+    LPRINTF("incomplete message received.\n\r");
+    return RPMSG_ERR_BUFF_SIZE;
+    }
+
+  cmd=((R5_RPMSG_TYPE*)data)->command;
+
+  switch(cmd)
+    {
+    // readback ADC values sent by R5
+    case RPMSGCMD_READ_ADC:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      g_adcval[0]=(s16)(d&0x0000FFFF);
+      g_adcval[1]=(s16)((d>>16)&0x0000FFFF);
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      g_adcval[2]=(s16)(d&0x0000FFFF);
+      g_adcval[3]=(s16)((d>>16)&0x0000FFFF);
+      break;
+    }
+
   return RPMSG_SUCCESS;
   }
+
+
+// -----------------------------------------------------------
 
 static void rpmsg_service_unbind(struct rpmsg_endpoint *ept)
   {
@@ -169,7 +242,7 @@ int SetupSystem(void **platformp)
 
   LPRINTF("Waiting for remote answer...\n");
 	while(!is_rpmsg_ept_ready(&endp))
-		platform_poll(platform);
+		platform_poll(*platformp);
 
 	LPRINTF("RPMSG endpoint is binded with remote.\r\n");
 
@@ -227,13 +300,18 @@ int main(int argc, char *argv[])
   LPRINTF("\r\nR5 test application #5 : shared PL resources + IRQs + IPC (openamp)\r\n\r\n");
   LPRINTF("This is A53/linux side\r\n\r\n");
 
-  status = SetupSystem(&platform);
+  // init vars
+  gIncomingRpmsgs=0;
+  for (i=0; i<4; i++)
+    g_adcval[i]=0;
+
+  status = SetupSystem(&gplatform);
   if(status!=0)
     {
     LPRINTF("ERROR Setting up System - aborting\r\n");
     return status;
     }
-
+  
   status = startSCPIserver(&sock, &active_fd_set);
   if(status!=SCPI_NO_ERR)
     {
@@ -311,33 +389,12 @@ int main(int argc, char *argv[])
   //   numIRQ=metal_io_read32(sample_shmem_io, 0);
   //   LPRINTF("# of Timer IRQs: %d\r\n", numIRQ);
 
-  //   LPRINTF("Enter frequency (Hz, float)               : ");
-  //   status=scanf("%f", &theFreq);
-  //   if(status<1)
-  //     break;
-  //   LPRINTF("Enter amplitude (%% full scale, signed int): ");
-  //   status=scanf("%d", &theAmp);
-  //   if(status<1)
-  //     break;
-  //   LPRINTF("Enter constant DAC#4 value (volt, float)  : ");
-  //   status=scanf("%f", &theVolt);
-  //   if(status<1)
-  //     break;
-  //   // send new parameters to R5
-  //   gMsgPtr->freqHz=theFreq;
-  //   gMsgPtr->percentAmplitude=theAmp;
-  //   gMsgPtr->constValVolt=theVolt;
-  //   numbytes= rpmsg_send(&endp, gMsgPtr, rpmsglen);
-  //   if(numbytes<rpmsglen)
-  //     LPRINTF("ERROR sending RPMSG\n");
-  //   else
-  //     LPRINTF("Successfully sent RPMSG\n");
   //   }
   
   // cleanup and exit
   LPRINTF("\nExiting\n");
 
-  status = CleanupSystem(platform);
+  status = CleanupSystem(gplatform);
   if(status!=0)
     {
     LPRINTF("ERROR Cleaning up System\n");

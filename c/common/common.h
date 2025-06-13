@@ -25,6 +25,7 @@
 #define XST_FAILURE                     1L
 
 typedef __uint32_t u32;
+typedef    int16_t s16;
 
 #define LPRINTF(format, ...) printf(format, ##__VA_ARGS__)
 #endif
