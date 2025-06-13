@@ -29,14 +29,14 @@
 #define RSC_MEM_PA          0x3ED48000UL
 #define RSC_MEM_SIZE        0x2000UL
 
-#define RPMSG_ANSWER_TIMEOUT_SEC (3.0)
+#define RPMSG_ANSWER_TIMEOUT_SEC (1.0)
 #define RPMSG_ANSWER_VALID     0
 #define RPMSG_ANSWER_ERR       1
 #define RPMSG_ANSWER_TIMEOUT   2
 
 // ##########  extern globals  ################
 extern void *gplatform;
-extern s16 g_adcval[4];
+extern s16 g_adcval[4], g_dacval[4];
 
 
 // ##########  protos  ########################

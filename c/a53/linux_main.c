@@ -23,7 +23,7 @@ static struct remoteproc rproc_inst;
 static int ept_deleted = 0;
 int gIncomingRpmsgs;
 
-s16 g_adcval[4];
+s16 g_adcval[4], g_dacval[4];
 
 
 
@@ -103,6 +103,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 
   switch(cmd)
     {
+    // readback DAC values sent by R5
+    case RPMSGCMD_READ_DAC:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      g_dacval[0]=(s16)(d&0x0000FFFF);
+      g_dacval[1]=(s16)((d>>16)&0x0000FFFF);
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      g_dacval[2]=(s16)(d&0x0000FFFF);
+      g_dacval[3]=(s16)((d>>16)&0x0000FFFF);
+      break;
     // readback ADC values sent by R5
     case RPMSGCMD_READ_ADC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
@@ -303,7 +312,10 @@ int main(int argc, char *argv[])
   // init vars
   gIncomingRpmsgs=0;
   for (i=0; i<4; i++)
+    {
     g_adcval[i]=0;
+    g_dacval[i]=0;
+    }
 
   status = SetupSystem(&gplatform);
   if(status!=0)

@@ -108,16 +108,40 @@ void parse_RST(char *ans, size_t maxlen)
 
 //-------------------------------------------------------------------
 
-void parse_WRITE_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+void parse_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
   int n,nch, dac[4];
-  int numbytes, rpmsglen;
+  int numbytes, rpmsglen, status;
 
   
   if(rw==SCPI_READ)
     {
-    snprintf(ans, maxlen, "%s: read operation not supported\n", SCPI_ERRS);
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_DAC;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: DAC READBACK rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      {
+      // now wait for answer
+      status=WaitForRpmsg();
+      switch(status)
+        {
+        case RPMSG_ANSWER_VALID:
+          snprintf(ans, maxlen, "%s: %d %d %d %d\n", SCPI_OKS, g_dacval[0], g_dacval[1], g_dacval[2], g_dacval[3]);
+          break;
+        case RPMSG_ANSWER_TIMEOUT:
+          snprintf(ans, maxlen, "%s: DAC READBACK timed out\n", SCPI_ERRS);
+          break;
+        case RPMSG_ANSWER_ERR:
+          snprintf(ans, maxlen, "%s: DAC READBACK error\n", SCPI_ERRS);
+          break;
+        }
+      }
     }
   else
     {
@@ -258,7 +282,7 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
   else if(strcmp(p,"*RST")==0)
     parse_RST(ans, maxlen);
   else if(strcmp(p,"DAC")==0)
-    parse_WRITE_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+    parse_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)

@@ -39,7 +39,8 @@ typedef    int16_t s16;
 // commands from linux to R5
 #define RPMSGCMD_NOP        0
 #define RPMSGCMD_WRITE_DAC  1
-#define RPMSGCMD_READ_ADC   2
+#define RPMSGCMD_READ_DAC   2
+#define RPMSGCMD_READ_ADC   3
 
 
 // ##########  types  #######################

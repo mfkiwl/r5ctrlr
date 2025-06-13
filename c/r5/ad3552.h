@@ -73,8 +73,8 @@
 #define AD3552_SW_LDAC_24B             0x45
 
 // AD3552 scaling
-#define AD3552_AMPL                    (32768)
-#define AD3552_OFFS                    (32768)
+#define AD3552_AMPL                    (32768.0)
+#define AD3552_OFFS                    (32768.0)
 #define AD3552_FULLSCALE_VOLT          (10.0)
 
 // ##########  types  #######################

@@ -107,11 +107,29 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     // update DAC content with values requested by linux
     case RPMSGCMD_WRITE_DAC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
-      g_y[0]=((s16)(d&0x0000FFFF)) / 32768.;
-      g_y[1]=((s16)((d>>16)&0x0000FFFF)) / 32768.;
+      g_y[0]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
+      g_y[1]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
       d=((R5_RPMSG_TYPE*)data)->data[1];
-      g_y[2]=((s16)(d&0x0000FFFF)) / 32768.;
-      g_y[3]=((s16)((d>>16)&0x0000FFFF)) / 32768.;
+      g_y[2]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
+      g_y[3]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
+      break;
+
+    // read back DAC values to linux
+    case RPMSGCMD_READ_DAC:
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DAC;
+      // need an intermediate cast to s32 for negative numbers
+      ((R5_RPMSG_TYPE*)data)->data[0] = ((((u32)((s32)(round(g_y[1]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
+                                         (((u32)((s32)(round(g_y[0]*AD3552_AMPL))))&0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[1] = ((((u32)((s32)(round(g_y[3]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
+                                         (((u32)((s32)(round(g_y[2]*AD3552_AMPL))))&0x0000FFFF);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("DAC READBACK incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
       break;
 
     // send current ADC values back to linux
@@ -124,7 +142,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
-        LPRINTF("incomplete answer transmitted.\n\r");
+        LPRINTF("ADC READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
