@@ -317,8 +317,22 @@ void printHelp(int filedes)
   sendback(filedes,"Send CTRL-D to close the connection\n\n");
   sendback(filedes,"Command list:\n\n");
   sendback(filedes,"*IDN?                         : print firmware name and version\n");
-  sendback(filedes,"*STB?                         : ciccibum\n");
-  sendback(filedes,"*RST                          : pippo pluto paperino\n");
+  sendback(filedes,"*STB?                         : TODO\n");
+  sendback(filedes,"*RST                          : TODO\n");
+  sendback(filedes,"DAC <ch1> <ch2> <ch3> <ch4>   : write value of all 4 DAC channels;\n");
+  sendback(filedes,"                                the values are 16-bit 2's complement integers\n");
+  sendback(filedes,"                                in decimal notation; note that the values\n");
+  sendback(filedes,"                                are actuated synchronously to next edge\n");
+  sendback(filedes,"                                of the sampling clock\n");
+  sendback(filedes,"DAC?                          : read back the value of all 4 DAC channels;\n");
+  sendback(filedes,"DACCH <nch> <val>             : write value <val> into DAC channel <nch>;\n");
+  sendback(filedes,"                                <nch> must be in ranhe [1..4];\n");
+  sendback(filedes,"                                <val> is a 16-bit 2's complement integer\n");
+  sendback(filedes,"                                in decimal notation\n");
+  sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
+  sendback(filedes,"                                the values are updated at every cycle\n");
+  sendback(filedes,"                                of the sampling clock\n");
+  
   }
 
 
