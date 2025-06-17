@@ -37,6 +37,7 @@
 // ##########  extern globals  ################
 extern void *gplatform;
 extern s16 g_adcval[4], g_dacval[4];
+extern u32 gFsampl;
 
 
 // ##########  protos  ########################

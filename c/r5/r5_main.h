@@ -73,7 +73,7 @@
 #define TIMER_NUMBER           0
 
 // frequency of the timer interrupt:
-#define TIMER_FREQ_HZ          10000
+#define DEFAULT_TIMER_FREQ_HZ       10.e3
 // #defines for IRQ counter
 #define TIMER_IRQ_CNTR     0
 #define GPIO_IRQ_CNTR      1

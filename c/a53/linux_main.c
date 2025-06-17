@@ -24,7 +24,7 @@ static int ept_deleted = 0;
 int gIncomingRpmsgs;
 
 s16 g_adcval[4], g_dacval[4];
-
+u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
 
 
 struct remoteproc_priv rproc_priv = 
@@ -120,6 +120,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       d=((R5_RPMSG_TYPE*)data)->data[1];
       g_adcval[2]=(s16)(d&0x0000FFFF);
       g_adcval[3]=(s16)((d>>16)&0x0000FFFF);
+      break;
+    // readback sampling frequency
+    case RPMSGCMD_READ_FSAMPL:
+      gFsampl=((R5_RPMSG_TYPE*)data)->data[0];
       break;
     }
 
@@ -311,6 +315,7 @@ int main(int argc, char *argv[])
 
   // init vars
   gIncomingRpmsgs=0;
+  gFsampl=10000;  // 10 kHz default Fsampling
   for (i=0; i<4; i++)
     {
     g_adcval[i]=0;

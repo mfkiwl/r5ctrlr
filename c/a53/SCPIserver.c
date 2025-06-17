@@ -307,6 +307,76 @@ void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
 
 //-------------------------------------------------------------------
 
+void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  //float fs;
+  u32 fs;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_FSAMPL;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: FSAMPL READ rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      {
+      // now wait for answer
+      status=WaitForRpmsg();
+      switch(status)
+        {
+        case RPMSG_ANSWER_VALID:
+          snprintf(ans, maxlen, "%s: %d Hz\n", SCPI_OKS, gFsampl);
+          break;
+        case RPMSG_ANSWER_TIMEOUT:
+          snprintf(ans, maxlen, "%s: FSAMPL READ timed out\n", SCPI_ERRS);
+          break;
+        case RPMSG_ANSWER_ERR:
+          snprintf(ans, maxlen, "%s: FSAMPL READ error\n", SCPI_ERRS);
+          break;
+        }
+      }
+    }
+  else
+    {
+    // parse the desired sampling period in ns
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      fs=(u32)strtol(p, NULL, 10);
+      if(errno!=0 && fs==0)
+        {
+        snprintf(ans, maxlen, "%s: invalid sampling frequency\n", SCPI_ERRS);
+        }
+      else
+        {
+        // send rpmsg to R5
+        rpmsglen=sizeof(R5_RPMSG_TYPE);
+        rpmsg_ptr->command = RPMSGCMD_WRITE_FSAMPL;
+        rpmsg_ptr->data[0]=fs;
+        numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+        if(numbytes<rpmsglen)
+          snprintf(ans, maxlen, "%s: FSAMPL WRITE rpmsg_send() failed\n", SCPI_ERRS);
+        else
+          snprintf(ans, maxlen, "%s: sampling frequency update requested to %d Hz\n", SCPI_OKS, fs);
+        }
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing sampling frequency\n", SCPI_ERRS);
+      }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
 void printHelp(int filedes)
   {
   sendback(filedes,"R5 controller SCPI server commands\n\n");
@@ -332,7 +402,10 @@ void printHelp(int filedes)
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
   sendback(filedes,"                                of the sampling clock\n");
-  
+  sendback(filedes,"FSAMPL <val>                  : request R5 to change its sampling frequency to <val> Hz;\n");
+  sendback(filedes,"                                it will be approximated to the closest possible frequency;\n");
+  sendback(filedes,"                                use FSAMPL? to retrieve the actual value set by R5\n");
+  sendback(filedes,"FSAMPL?                       : retrieve R5 sampling frequency (1Hz precision)\n");  
   }
 
 
@@ -373,6 +446,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_DACCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"FSAMPL")==0)
+    parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);

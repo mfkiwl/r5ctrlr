@@ -63,10 +63,11 @@ unsigned long last_irq_cnt;
 XGpio theGpio;
 static XGpio_Config *gpioConfig;
 XTmrCtr theTimer;
-static XTmrCtr_Config *timerConfig;
+static XTmrCtr_Config *gTimerConfig;
 float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
 
+double gFsampl;
 u16    dacval[4];
 s16    adcval[4];
 double g2pi, gPhase, gdPhase, gFreq, gAmpl, gDCval, g_x[4], g_y[4];
@@ -86,7 +87,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)src;    // avoid warning on unused parameter
   (void)ept;    // avoid warning on unused parameter
 
-  u32 cmd, d;
+  u32 cmd, d, timerScaler;
   int numbytes, rpmsglen, ret, nch;
   double dval;
 
@@ -155,6 +156,31 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("ADC READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+    // change sampling frequency
+    case RPMSGCMD_WRITE_FSAMPL:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      // set timer period
+      XTmrCtr_SetResetValue(&theTimer, TIMER_NUMBER, (u32)(gTimerConfig->SysClockFreqHz/d));
+      // the actual sampling frequency is truncated to an integer fraction of timer clock (125 MHz);
+      // let's retrieve it
+      timerScaler=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
+      gFsampl=gTimerConfig->SysClockFreqHz/(1.0*timerScaler);
+      break;
+
+    // send current sampling frequency
+    case RPMSGCMD_READ_FSAMPL:
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_FSAMPL;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)gFsampl;
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("FSAMPL READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
@@ -255,7 +281,7 @@ static inline double GetTimer_us(void)
   u32 loadReg, cnts;
   cnts=XTmrCtr_GetValue(&theTimer, TIMER_NUMBER);
   loadReg=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
-  return 1.e6*(loadReg - cnts)/(1.0*timerConfig->SysClockFreqHz);
+  return 1.e6*(loadReg - cnts)/(1.0*gTimerConfig->SysClockFreqHz);
   }
 
 // -----------------------------------------------------------
@@ -269,7 +295,7 @@ static void TimerISR(void *callbackRef, u8 timer_num)
 
   // read current counter value to measure latency
   cnts=XTmrCtr_GetValue(timerPtr, timer_num);
-  gTimerIRQlatency=(timerConfig->SysClockFreqHz/TIMER_FREQ_HZ - cnts*1.0)/timerConfig->SysClockFreqHz;
+  gTimerIRQlatency=(gTimerConfig->SysClockFreqHz/gFsampl - cnts*1.0)/gTimerConfig->SysClockFreqHz;
 
   // increment number of received timer interrupts
   irq_cntr[TIMER_IRQ_CNTR]++;
@@ -514,11 +540,11 @@ int SetupAXItimer(void)
   // XTmrCtr_Initialize calls XTmrCtr_LookupConfig, XTmrCtr_CfgInitialize and XTmrCtr_InitHw
   // I prefer to call them explicitly to get a copy of the configuration structure, 
   // which contains the value of the AXI clock, needed to calculate the timer period.
-  timerConfig=XTmrCtr_LookupConfig(TIMER_DEVICE_ID);
-  if(NULL==timerConfig) 
+  gTimerConfig=XTmrCtr_LookupConfig(TIMER_DEVICE_ID);
+  if(NULL==gTimerConfig) 
     return XST_FAILURE;
   
-  XTmrCtr_CfgInitialize(&theTimer, timerConfig, timerConfig->BaseAddress);
+  XTmrCtr_CfgInitialize(&theTimer, gTimerConfig, gTimerConfig->BaseAddress);
 
   status=XTmrCtr_InitHw(&theTimer);
   if(status!=XST_SUCCESS)
@@ -539,10 +565,10 @@ int SetupAXItimer(void)
 
   // set timer period
   XTmrCtr_SetResetValue(&theTimer, TIMER_NUMBER,
-          (u32)(timerConfig->SysClockFreqHz/TIMER_FREQ_HZ));
+          (u32)(gTimerConfig->SysClockFreqHz/gFsampl));
   
   //loadreg=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
-  //LPRINTF("Timer period= %f s = %u counts\n\r", loadreg/(1.*timerConfig->SysClockFreqHz), loadreg);
+  //LPRINTF("Timer period= %f s = %u counts\n\r", loadreg/(1.*gTimerConfig->SysClockFreqHz), loadreg);
 
   gTimerIRQlatency=0;
   gMaxLatency=0;
@@ -800,12 +826,16 @@ int main()
   setvbuf (stdout, NULL, _IONBF, 0);
   setvbuf (stdin, NULL, _IONBF, 0);
   
+  // init vars
+  gFsampl = DEFAULT_TIMER_FREQ_HZ;
+  g2pi=8.*atan(1.);
+//  gPhase=0.0;
+  gR5ctrlState=R5CTRLR_IDLE;
+
   // init number of IRQ served
   last_irq_cnt=0;
   for(i=0; i<4; i++)
     irq_cntr[i]=0;
-
-  gR5ctrlState=R5CTRLR_IDLE;
 
   // // init sample loop parameters
   // gLoopParameters.freqHz=1000.f;
@@ -835,8 +865,6 @@ int main()
     return status;
     }
 
-  g2pi=8.*atan(1.);
-//  gPhase=0.0;
   
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
@@ -897,7 +925,7 @@ int main()
       // gFreq=gLoopParameters.freqHz;
       // gAmpl=gLoopParameters.percentAmplitude*0.01;
       // gDCval=gLoopParameters.constValVolt;
-      // gdPhase= g2pi*gFreq/(double)(TIMER_FREQ_HZ);
+      // gdPhase= g2pi*gFreq/gFsampl;
       // gPhase += gdPhase;
       // if(gPhase>g2pi)
       //   gPhase -= g2pi;
@@ -940,9 +968,12 @@ int main()
       // metal_io_write32(sample_shmem_io, 0, irq_cntr[TIMER_IRQ_CNTR]);
 
       // every now and then print something
-      if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= TIMER_FREQ_HZ)
+      if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= gFsampl)
         {
         last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
+
+        // print IRQ number
+        LPRINTF("Tot IRQs so far: %d \n\r",last_irq_cnt);
 
         // print ADC values
         for(i=0; i<4; i++)

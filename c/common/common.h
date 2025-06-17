@@ -42,6 +42,8 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_DAC     2
 #define RPMSGCMD_WRITE_DACCH  3
 #define RPMSGCMD_READ_ADC     4
+#define RPMSGCMD_WRITE_FSAMPL 5
+#define RPMSGCMD_READ_FSAMPL  6
 
 
 // ##########  types  #######################
