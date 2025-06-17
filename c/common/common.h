@@ -37,28 +37,39 @@ typedef    int16_t s16;
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"
 
 // commands from linux to R5
-#define RPMSGCMD_NOP          0
-#define RPMSGCMD_WRITE_DAC    1
-#define RPMSGCMD_READ_DAC     2
-#define RPMSGCMD_WRITE_DACCH  3
-#define RPMSGCMD_READ_ADC     4
-#define RPMSGCMD_WRITE_FSAMPL 5
-#define RPMSGCMD_READ_FSAMPL  6
-#define RPMSGCMD_WGEN_ONOFF   7
-#define RPMSGCMD_READ_STATE   8
+#define RPMSGCMD_NOP           0
+#define RPMSGCMD_WRITE_DAC     1
+#define RPMSGCMD_READ_DAC      2
+#define RPMSGCMD_WRITE_DACCH   3
+#define RPMSGCMD_READ_ADC      4
+#define RPMSGCMD_WRITE_FSAMPL  5
+#define RPMSGCMD_READ_FSAMPL   6
+#define RPMSGCMD_WGEN_ONOFF    7
+#define RPMSGCMD_READ_STATE    8
+#define RPMSGCMD_WRITE_WGENCH  9
+#define RPMSGCMD_READ_WGENCH  10
 
 // R5 application state
 #define R5CTRLR_IDLE     0
 #define R5CTRLR_WAVEGEN  1
 
+// wave generator channel config
+#define WGEN_CH_ENABLE_OFF       0
+#define WGEN_CH_ENABLE_ON        1
+#define WGEN_CH_ENABLE_SINGLE    2
+#define WGEN_CH_TYPE_DC          0
+#define WGEN_CH_TYPE_SINE        1
+#define WGEN_CH_TYPE_SWEEP       2
+
 
 // ##########  types  #######################
-// typedef struct
-//   {
-//   float freqHz;
-//   int   percentAmplitude;
-//   float constValVolt;
-//   } LOOP_PARAM_MSG_TYPE;
+
+typedef struct
+  {
+  int    enable;   // OFF/ON/SINGLE
+  int    type;     // DC/SINE/SWEEP
+  float  ampl, offs, f1, f2, dt;
+  } WAVEGEN_CH_CONFIG;
 
 typedef struct rpmsg_endpoint RPMSG_ENDP_TYPE;
 

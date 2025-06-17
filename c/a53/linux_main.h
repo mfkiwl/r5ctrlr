@@ -39,6 +39,7 @@ extern void *gplatform;
 extern s16 g_adcval[4], g_dacval[4];
 extern u32 gFsampl;
 extern int gR5ctrlState;
+extern WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 
 
 // ##########  protos  ########################

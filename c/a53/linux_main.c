@@ -26,6 +26,7 @@ int gIncomingRpmsgs;
 s16 g_adcval[4], g_dacval[4];
 u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
 int gR5ctrlState;
+WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 
 
 struct remoteproc_priv rproc_priv = 
@@ -91,6 +92,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)priv;   // avoid warning on unused parameter
 
   u32 cmd, d;
+  int nch;
 
   gIncomingRpmsgs++;
 
@@ -133,6 +135,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_STATE:
       gR5ctrlState=(int)((R5_RPMSG_TYPE*)data)->data[0];
       break;
+
+    // readback wavefrom generator channel config
+    case RPMSGCMD_READ_WGENCH:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      gWavegenChanConfig[nch-1].enable = (int)(d&0x0000FFFF);
+      gWavegenChanConfig[nch-1].type   = (int)((d>>16)&0x0000FFFF);
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gWavegenChanConfig[nch-1].ampl), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].offs), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].f1),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].f2),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].dt),   &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
     }
 
   return RPMSG_SUCCESS;
@@ -329,6 +349,13 @@ int main(int argc, char *argv[])
     {
     g_adcval[i]=0;
     g_dacval[i]=0;
+    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
+    gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
+    gWavegenChanConfig[i].ampl   = 0.;
+    gWavegenChanConfig[i].offs   = 0.;
+    gWavegenChanConfig[i].f1     = 0.;
+    gWavegenChanConfig[i].f2     = 0.;
+    gWavegenChanConfig[i].dt     = 1.;
     }
 
   status = SetupSystem(&gplatform);

@@ -386,7 +386,7 @@ void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R
     }
   else
     {
-    // parse the desired sampling period in ns
+    // parse the desired sampling frequency in Hz
     p=strtok(NULL," ");
     if(p!=NULL)
       {
@@ -471,6 +471,305 @@ void parse_WAVEGEN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
 //-------------------------------------------------------------------
 
+void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,enbl, wtype;
+  float x;
+  int numbytes, rpmsglen, status;
+  char enblstr[16], wtypestr[16];
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request waveform generator channel configuration
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: WAVEGEN channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_WGENCH;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: WAVEGEN chan READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+
+        switch(gWavegenChanConfig[nch-1].enable)
+          {
+          case WGEN_CH_ENABLE_OFF:
+            strcpy(enblstr,"OFF");
+            break;
+          case WGEN_CH_ENABLE_ON:
+            strcpy(enblstr,"ON");
+            break;
+          case WGEN_CH_ENABLE_SINGLE:
+            strcpy(enblstr,"SINGLE");
+            break;
+          }
+
+        switch(gWavegenChanConfig[nch-1].type)
+          {
+          case WGEN_CH_TYPE_DC:
+            strcpy(wtypestr,"DC");
+            break;
+          case WGEN_CH_TYPE_SINE:
+            strcpy(wtypestr,"SINE");
+            break;
+          case WGEN_CH_TYPE_SWEEP:
+            strcpy(wtypestr,"SWEEP");
+            break;
+          }
+
+        snprintf(ans, maxlen, "%s: %s %s %g %g %g %g %g\n",
+                    SCPI_OKS,
+                    enblstr,
+                    wtypestr,
+                    gWavegenChanConfig[nch-1].ampl,
+                    gWavegenChanConfig[nch-1].offs,
+                    gWavegenChanConfig[nch-1].f1,
+                    gWavegenChanConfig[nch-1].f2,
+                    gWavegenChanConfig[nch-1].dt
+                );
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: FSAMPL READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: FSAMPL READ error\n", SCPI_ERRS);
+        break;
+      }
+
+
+    }
+  else
+    {
+    // WRITE: configure one waveform generator channel
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: WAVEGEN channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the ENABLE state (OFF/ON/SINGLE)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"OFF")==0)
+      enbl=WGEN_CH_ENABLE_OFF;
+    else if(strcmp(p,"ON")==0)
+      enbl=WGEN_CH_ENABLE_ON;
+    else if(strcmp(p,"SINGLE")==0)
+      enbl=WGEN_CH_ENABLE_SINGLE;
+    else
+      enbl=-1;
+    
+    if(enbl<0)
+      {
+      snprintf(ans, maxlen, "%s: use ON/OFF/SINGLE for WAVEGEN channel enable state\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the waveform TYPE (DC/SINE/SWEEP)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing waveform type\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"DC")==0)
+      wtype=WGEN_CH_TYPE_DC;
+    else if(strcmp(p,"SINE")==0)
+      wtype=WGEN_CH_TYPE_SINE;
+    else if(strcmp(p,"SWEEP")==0)
+      wtype=WGEN_CH_TYPE_SWEEP;
+    else
+      wtype=-1;
+    
+    if(wtype<0)
+      {
+      snprintf(ans, maxlen, "%s: use DC/SINE/SWEEP as waveform type\n", SCPI_ERRS);
+      return;
+      }
+
+    // start filling the rpmsg with the integer parameters
+    rpmsg_ptr->command = RPMSGCMD_WRITE_WGENCH;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = ((((u32)(wtype))<<16) &0xFFFF0000) | (((u32)(enbl)) &0x0000FFFF);
+
+    // now parse floating point values; 
+    // the number of parameters depends on the type of waveform that was requested
+
+
+    // next in line is amplitude (needed by every waveform)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing amplitude\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    if(errno!=0 && x==0.0F)
+      {
+      snprintf(ans, maxlen, "%s: invalid amplitude\n", SCPI_ERRS);
+      return;
+      }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[2]), &x, sizeof(u32));
+
+
+    // next in line is offset (for SINE and SWEEP waveforms, not for DC)
+    if(wtype!=WGEN_CH_TYPE_DC)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing offset\n", SCPI_ERRS);
+        return;
+        }
+      x=strtof(p, NULL);
+      if(errno!=0 && x==0.0F)
+        {
+        snprintf(ans, maxlen, "%s: invalid offset\n", SCPI_ERRS);
+        return;
+        }
+      }
+    else
+      x=0.0F;
+
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[3]), &x, sizeof(u32));
+    //LPRINTF(">>%g<<\n",*((float*)&(rpmsg_ptr->data[3])));
+
+
+    // next in line is f1 (for SINE and SWEEP waveforms, not for DC)
+    if(wtype!=WGEN_CH_TYPE_DC)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing frequency\n", SCPI_ERRS);
+        return;
+        }
+      x=strtof(p, NULL);
+      if(errno!=0 && x==0.0F)
+        {
+        snprintf(ans, maxlen, "%s: invalid frequency\n", SCPI_ERRS);
+        return;
+        }
+      }
+    else
+      x=0.0F;
+
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[4]), &x, sizeof(u32));
+
+
+    // next in line is f2 (for SWEEP waveform only, not for DC or SINE)
+    if(wtype==WGEN_CH_TYPE_SWEEP)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing end frequency\n", SCPI_ERRS);
+        return;
+        }
+      x=strtof(p, NULL);
+      if(errno!=0 && x==0.0F)
+        {
+        snprintf(ans, maxlen, "%s: invalid end frequency\n", SCPI_ERRS);
+        return;
+        }
+      }
+    else
+      x=0.0F;
+
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[5]), &x, sizeof(u32));
+
+
+    // next in line is dt (for SWEEP waveform only, not for DC or SINE)
+    if(wtype==WGEN_CH_TYPE_SWEEP)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing sweep time\n", SCPI_ERRS);
+        return;
+        }
+      x=strtof(p, NULL);
+      if(errno!=0 && x==0.0F)
+        {
+        snprintf(ans, maxlen, "%s: invalid sweep time\n", SCPI_ERRS);
+        return;
+        }
+      }
+    else
+      x=1.0F;  // to prevent divisions by 0 :-)
+
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[6]), &x, sizeof(u32));
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: WAVEGENCH WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: WAVEGEN chan %d updated\n", SCPI_OKS, nch);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void printHelp(int filedes)
   {
   sendback(filedes,"R5 controller SCPI server commands\n\n");
@@ -545,6 +844,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN")==0)
     parse_WAVEGEN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"WAVEGENCH")==0)
+    parse_WAVEGENCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);

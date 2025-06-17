@@ -76,6 +76,7 @@ double g2pi, gPhase, gdPhase, gFreq, gAmpl, gDCval, g_x[4], g_y[4];
 double time_table[PROFILE_TIME_ENTRIES][5];
 
 int gR5ctrlState;
+WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 
 
 // ##########  implementation  ################
@@ -208,6 +209,49 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
 
+    // config one wavefrom generator channel
+    case RPMSGCMD_WRITE_WGENCH:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      gWavegenChanConfig[nch-1].enable = (int)(d&0x0000FFFF);
+      gWavegenChanConfig[nch-1].type   = (int)((d>>16)&0x0000FFFF);
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gWavegenChanConfig[nch-1].ampl), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].offs), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].f1),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].f2),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gWavegenChanConfig[nch-1].dt),   &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+    
+    // read back config of one wavefrom generator channel
+    case RPMSGCMD_READ_WGENCH:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGENCH;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (((u32)(gWavegenChanConfig[nch-1].type)<<16) &0xFFFF0000) |
+                                        ((u32)(gWavegenChanConfig[nch-1].enable) &0x0000FFFF);
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gWavegenChanConfig[nch-1].ampl), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gWavegenChanConfig[nch-1].offs), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[4]), &(gWavegenChanConfig[nch-1].f1),   sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[5]), &(gWavegenChanConfig[nch-1].f2),   sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[6]), &(gWavegenChanConfig[nch-1].dt),   sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("WGEN_CH READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+    
     }
 
   // // use msg to update parameters
@@ -854,6 +898,17 @@ int main()
   g2pi=8.*atan(1.);
 //  gPhase=0.0;
   gR5ctrlState=R5CTRLR_IDLE;
+  for(i=0; i<4; i++)
+    {
+    g_y[i]=0.;
+    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
+    gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
+    gWavegenChanConfig[i].ampl   = 0.;
+    gWavegenChanConfig[i].offs   = 0.;
+    gWavegenChanConfig[i].f1     = 0.;
+    gWavegenChanConfig[i].f2     = 0.;
+    gWavegenChanConfig[i].dt     = 1.;
+    }
 
   // init number of IRQ served
   last_irq_cnt=0;
@@ -1022,6 +1077,69 @@ int main()
             //         DECIMALS(g_x[i]*ADAQ23876_FULLSCALE_VOLT,3)
             //        );
             LPRINTF("ADC#%d = %6d ",i, adcval[i]);
+          LPRINTF("\n\r");
+          }
+
+        // in WAVEGEN mode print channel configurations
+        if( gR5ctrlState == R5CTRLR_WAVEGEN )
+          {
+          for(i=0; i<4; i++)
+            {
+            LPRINTF("WAVEGEN CH# %d ",i+1);
+
+            switch(gWavegenChanConfig[i].enable)
+              {
+              case WGEN_CH_ENABLE_OFF:
+                LPRINTF("   OFF  ");
+                break;
+              case WGEN_CH_ENABLE_ON:
+                LPRINTF("   ON   ");
+                break;
+              case WGEN_CH_ENABLE_SINGLE:
+                LPRINTF(" SINGLE ");
+                break;
+              }
+
+            switch(gWavegenChanConfig[i].type)
+              {
+              case WGEN_CH_TYPE_DC:
+                LPRINTF("   DC  ");
+                break;
+              case WGEN_CH_TYPE_SINE:
+                LPRINTF("  SINE ");
+                break;
+              case WGEN_CH_TYPE_SWEEP:
+                LPRINTF(" SWEEP ");
+                break;
+              }
+            
+            LPRINTF(" A= %3d.%03d ",
+                    (int)(gWavegenChanConfig[i].ampl),
+                    DECIMALS(gWavegenChanConfig[i].ampl,3)
+                   );
+
+            LPRINTF(" offs= %3d.%03d ",
+                    (int)(gWavegenChanConfig[i].offs),
+                    DECIMALS(gWavegenChanConfig[i].offs,3)
+                   );
+
+            LPRINTF(" f1= %3d.%03d ",
+                    (int)(gWavegenChanConfig[i].f1),
+                    DECIMALS(gWavegenChanConfig[i].f1,3)
+                   );
+
+            LPRINTF(" f2= %3d.%03d ",
+                    (int)(gWavegenChanConfig[i].f2),
+                    DECIMALS(gWavegenChanConfig[i].f2,3)
+                   );
+
+            LPRINTF(" dt= %3d.%03d ",
+                    (int)(gWavegenChanConfig[i].dt),
+                    DECIMALS(gWavegenChanConfig[i].dt,3)
+                   );
+
+            LPRINTF("\n\r");
+            }
           LPRINTF("\n\r");
           }
 
