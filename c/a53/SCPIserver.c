@@ -90,11 +90,54 @@ void parse_IDN(char *ans, size_t maxlen)
 
 //-------------------------------------------------------------------
 
-void parse_STB(char *ans, size_t maxlen)
+void parse_STB(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
-   snprintf(ans, maxlen, 
-            "%s: ciccibum\n", SCPI_OKS
-           );
+  int numbytes, rpmsglen, status;
+
+  // retrieve R5 state
+
+  if(rw==SCPI_READ)
+    {
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_STATE;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: STB READ rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      {
+      // now wait for answer
+      status=WaitForRpmsg();
+      switch(status)
+        {
+        case RPMSG_ANSWER_VALID:
+          // print current state
+          switch(gR5ctrlState)
+            {
+            case R5CTRLR_IDLE:
+              snprintf(ans, maxlen, "%s: IDLE is current state\n", SCPI_OKS);
+              break;
+            case R5CTRLR_WAVEGEN:
+              snprintf(ans, maxlen, "%s: WAVEGEN is current state\n", SCPI_OKS);
+              break;
+            }
+
+          break;
+        case RPMSG_ANSWER_TIMEOUT:
+          snprintf(ans, maxlen, "%s: STATUS READ timed out\n", SCPI_ERRS);
+          break;
+        case RPMSG_ANSWER_ERR:
+          snprintf(ans, maxlen, "%s: STATUS READ error\n", SCPI_ERRS);
+          break;
+        }
+      }
+    }
+  else
+    {
+    snprintf(ans, maxlen, "%s: write operation not supported\n", SCPI_ERRS);
+    }
   }
 
 
@@ -265,7 +308,6 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
 
 void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
-  char *p;
   int n,nch, adc[4];
   int numbytes, rpmsglen, status;
 
@@ -310,7 +352,6 @@ void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
 void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
-  //float fs;
   u32 fs;
   int numbytes, rpmsglen, status;
 
@@ -364,12 +405,65 @@ void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R
         if(numbytes<rpmsglen)
           snprintf(ans, maxlen, "%s: FSAMPL WRITE rpmsg_send() failed\n", SCPI_ERRS);
         else
-          snprintf(ans, maxlen, "%s: sampling frequency update requested to %d Hz\n", SCPI_OKS, fs);
+          snprintf(ans, maxlen, "%s: requested %d Hz sampling frequency\n", SCPI_OKS, fs);
         }
       }
     else
       {
       snprintf(ans, maxlen, "%s: missing sampling frequency\n", SCPI_ERRS);
+      }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_WAVEGEN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int onoff;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    snprintf(ans, maxlen, "%s: read operation not supported; use *STB? instead\n", SCPI_ERRS);
+    }
+  else
+    {
+    // turn wave generator mode ON or OFF
+
+    // next in line is ON or OFF
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      if(strcmp(p,"ON")==0)
+        onoff=1;
+      else if(strcmp(p,"OFF")==0)
+        onoff=0;
+      else
+        onoff=-1;
+      
+      if(onoff>=0)
+        {
+        // send rpmsg to R5
+        rpmsglen=sizeof(R5_RPMSG_TYPE);
+        rpmsg_ptr->command = RPMSGCMD_WGEN_ONOFF;
+        rpmsg_ptr->data[0]=(u32)onoff;
+        numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+        if(numbytes<rpmsglen)
+          snprintf(ans, maxlen, "%s: WAVEGEN WRITE rpmsg_send() failed\n", SCPI_ERRS);
+        else
+          snprintf(ans, maxlen, "%s: WAVEFORM GENERATOR switched %s\n", SCPI_OKS, onoff==1? "ON" : "OFF");
+        }
+      else
+        {
+        snprintf(ans, maxlen, "%s: use ON/OFF with WAVEGEN command\n", SCPI_ERRS);
+        }        
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
       }
     }
   }
@@ -387,7 +481,7 @@ void printHelp(int filedes)
   sendback(filedes,"Send CTRL-D to close the connection\n\n");
   sendback(filedes,"Command list:\n\n");
   sendback(filedes,"*IDN?                         : print firmware name and version\n");
-  sendback(filedes,"*STB?                         : TODO\n");
+  sendback(filedes,"*STB?                         : retrieve current state\n");
   sendback(filedes,"*RST                          : TODO\n");
   sendback(filedes,"DAC <ch1> <ch2> <ch3> <ch4>   : write value of all 4 DAC channels;\n");
   sendback(filedes,"                                the values are 16-bit 2's complement integers\n");
@@ -402,10 +496,11 @@ void printHelp(int filedes)
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
   sendback(filedes,"                                of the sampling clock\n");
-  sendback(filedes,"FSAMPL <val>                  : request R5 to change its sampling frequency to <val> Hz;\n");
+  sendback(filedes,"FSAMPL <val>                  : request to change sampling frequency to <val> Hz;\n");
   sendback(filedes,"                                it will be approximated to the closest possible frequency;\n");
-  sendback(filedes,"                                use FSAMPL? to retrieve the actual value set by R5\n");
-  sendback(filedes,"FSAMPL?                       : retrieve R5 sampling frequency (1Hz precision)\n");  
+  sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
+  sendback(filedes,"FSAMPL?                       : retrieve sampling frequency (1Hz precision)\n");
+  sendback(filedes,"WAVEGEN {ON|OFF}              : start/stop waveform generator mode\n");
   }
 
 
@@ -437,7 +532,7 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
   if(strcmp(p,"*IDN")==0)
     parse_IDN(ans, maxlen);
   else if(strcmp(p,"*STB")==0)
-    parse_STB(ans, maxlen);
+    parse_STB(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"*RST")==0)
     parse_RST(ans, maxlen);
   else if(strcmp(p,"DAC")==0)
@@ -448,6 +543,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"FSAMPL")==0)
     parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"WAVEGEN")==0)
+    parse_WAVEGEN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);

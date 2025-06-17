@@ -25,6 +25,7 @@ int gIncomingRpmsgs;
 
 s16 g_adcval[4], g_dacval[4];
 u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
+int gR5ctrlState;
 
 
 struct remoteproc_priv rproc_priv = 
@@ -112,6 +113,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       g_dacval[2]=(s16)(d&0x0000FFFF);
       g_dacval[3]=(s16)((d>>16)&0x0000FFFF);
       break;
+
     // readback ADC values sent by R5
     case RPMSGCMD_READ_ADC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
@@ -121,9 +123,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       g_adcval[2]=(s16)(d&0x0000FFFF);
       g_adcval[3]=(s16)((d>>16)&0x0000FFFF);
       break;
+
     // readback sampling frequency
     case RPMSGCMD_READ_FSAMPL:
       gFsampl=((R5_RPMSG_TYPE*)data)->data[0];
+      break;
+
+    // readback state
+    case RPMSGCMD_READ_STATE:
+      gR5ctrlState=(int)((R5_RPMSG_TYPE*)data)->data[0];
       break;
     }
 
@@ -314,6 +322,7 @@ int main(int argc, char *argv[])
   LPRINTF("This is A53/linux side\r\n\r\n");
 
   // init vars
+  gR5ctrlState=R5CTRLR_IDLE;
   gIncomingRpmsgs=0;
   gFsampl=10000;  // 10 kHz default Fsampling
   for (i=0; i<4; i++)

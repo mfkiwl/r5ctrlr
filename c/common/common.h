@@ -44,6 +44,12 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_ADC     4
 #define RPMSGCMD_WRITE_FSAMPL 5
 #define RPMSGCMD_READ_FSAMPL  6
+#define RPMSGCMD_WGEN_ONOFF   7
+#define RPMSGCMD_READ_STATE   8
+
+// R5 application state
+#define R5CTRLR_IDLE     0
+#define R5CTRLR_WAVEGEN  1
 
 
 // ##########  types  #######################

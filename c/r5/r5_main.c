@@ -185,6 +185,29 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
 
+    // start or stop WAVEFORM GENERATOR mode
+    case RPMSGCMD_WGEN_ONOFF:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      if(d==0)
+        gR5ctrlState=R5CTRLR_IDLE;
+      else
+        gR5ctrlState=R5CTRLR_WAVEGEN;
+      break;
+
+    // send current state
+    case RPMSGCMD_READ_STATE:
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_STATE;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)gR5ctrlState;
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("STATE READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
     }
 
   // // use msg to update parameters
@@ -918,6 +941,8 @@ int main()
         {
         case R5CTRLR_IDLE:
           break;
+        case R5CTRLR_WAVEGEN:
+          break;
         }
       
 
@@ -972,18 +997,33 @@ int main()
         {
         last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
 
-        // print IRQ number
-        LPRINTF("Tot IRQs so far: %d \n\r",last_irq_cnt);
+        // // print current state
+        // LPRINTF("R5 state is ");
+        // switch(gR5ctrlState)
+        //   {
+        //   case R5CTRLR_IDLE:
+        //     LPRINTF("IDLE\n\r");
+        //     break;
+        //   case R5CTRLR_WAVEGEN:
+        //     LPRINTF("WAVEGEN\n\r");
+        //     break;
+        //   }
+          
+        //  // print IRQ number
+        //  LPRINTF("Tot IRQs so far: %d \n\r",last_irq_cnt);
 
-        // print ADC values
-        for(i=0; i<4; i++)
-          // LPRINTF("ADC#%d = %3d.%03d ",
-          //         i,
-          //         (int)(g_x[i]*ADAQ23876_FULLSCALE_VOLT),
-          //         DECIMALS(g_x[i]*ADAQ23876_FULLSCALE_VOLT,3)
-          //        );
-          LPRINTF("ADC#%d = %6d ",i, adcval[i]);
-        LPRINTF("\n\r");
+        // in IDLE mode print ADC values
+        if( gR5ctrlState == R5CTRLR_IDLE )
+          {
+          for(i=0; i<4; i++)
+            // LPRINTF("ADC#%d = %3d.%03d ",
+            //         i,
+            //         (int)(g_x[i]*ADAQ23876_FULLSCALE_VOLT),
+            //         DECIMALS(g_x[i]*ADAQ23876_FULLSCALE_VOLT,3)
+            //        );
+            LPRINTF("ADC#%d = %6d ",i, adcval[i]);
+          LPRINTF("\n\r");
+          }
 
         // print profiling info
         #ifdef PROFILE

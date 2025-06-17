@@ -89,9 +89,6 @@
 #define PROFTIME_MAX             3
 #define PROFTIME_N               4
 
-// R5 application state
-#define R5CTRLR_IDLE   0
-
 
 // ##########  types  #######################
 typedef struct
