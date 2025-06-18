@@ -91,12 +91,7 @@
 
 
 // ##########  types  #######################
-typedef struct
-  {
-  float freqHz;
-  int   percentAmplitude;
-  float constValVolt;
-  } LOOP_PARAM_TYPE;
+
 
 // ##########  extern globals  ################
 

@@ -31,6 +31,7 @@ typedef    int16_t s16;
 #endif
 
 #define LPERROR(format, ...) LPRINTF("ERROR: " format, ##__VA_ARGS__)
+#define SIGN(x) (x<0?'-':'+')
 #define DECIMALS(x,n) (int)(fabs(x-(int)(x))*pow(10,n)+0.5)
 
 //---------- openamp stuff -------------------------

@@ -1113,26 +1113,33 @@ int main()
                 break;
               }
             
-            LPRINTF(" A= %3d.%03d ",
-                    (int)(gWavegenChanConfig[i].ampl),
+            // R5 cannot print floats with xil_printf,
+            // so we use a few macros; 
+            // note that "SIGN" is needed to properly print 
+            // values in range (0,-1)
+
+            // amplitude is positive
+            LPRINTF(" A= %d.%03d ",
+                    (int)(fabs(gWavegenChanConfig[i].ampl)),
                     DECIMALS(gWavegenChanConfig[i].ampl,3)
                    );
-
-            LPRINTF(" offs= %3d.%03d ",
+            // offset may be negative
+            LPRINTF(" offs= %c%d.%03d ",
+                    SIGN(gWavegenChanConfig[i].offs),
                     (int)(gWavegenChanConfig[i].offs),
                     DECIMALS(gWavegenChanConfig[i].offs,3)
                    );
-
+            // fstart is positive
             LPRINTF(" f1= %3d.%03d ",
                     (int)(gWavegenChanConfig[i].f1),
                     DECIMALS(gWavegenChanConfig[i].f1,3)
                    );
-
+            // fstop is positive
             LPRINTF(" f2= %3d.%03d ",
                     (int)(gWavegenChanConfig[i].f2),
                     DECIMALS(gWavegenChanConfig[i].f2,3)
                    );
-
+            // sweep time is positive
             LPRINTF(" dt= %3d.%03d ",
                     (int)(gWavegenChanConfig[i].dt),
                     DECIMALS(gWavegenChanConfig[i].dt,3)

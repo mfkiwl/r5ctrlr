@@ -789,7 +789,7 @@ void printHelp(int filedes)
   sendback(filedes,"                                of the sampling clock\n");
   sendback(filedes,"DAC?                          : read back the value of all 4 DAC channels;\n");
   sendback(filedes,"DACCH <nch> <val>             : write value <val> into DAC channel <nch>;\n");
-  sendback(filedes,"                                <nch> must be in ranhe [1..4];\n");
+  sendback(filedes,"                                <nch> is in range [1..4];\n");
   sendback(filedes,"                                <val> is a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
@@ -799,7 +799,23 @@ void printHelp(int filedes)
   sendback(filedes,"                                it will be approximated to the closest possible frequency;\n");
   sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
   sendback(filedes,"FSAMPL?                       : retrieve sampling frequency (1Hz precision)\n");
-  sendback(filedes,"WAVEGEN {ON|OFF}              : start/stop waveform generator mode\n");
+  sendback(filedes,"WAVEGEN {OFF|ON}              : start/stop waveform generator mode\n");
+  sendback(filedes,"WAVEGENCH <nch> {OFF|ON|SINGLE} {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
+  sendback(filedes,"                              : configures channel <chan> of the waveform generator;\n");
+  sendback(filedes,"                                notes:\n");
+  sendback(filedes,"                                - <nch> is in range [1..4];\n");
+  sendback(filedes,"                                - SINGLE can be used only in association with SWEEP;\n");
+  sendback(filedes,"                                - <ampl> and <offs> are fraction of the fullscale, so\n");
+  sendback(filedes,"                                  <ampl> is in (0,1) and <offs> is in (-1,1) range;\n");
+  sendback(filedes,"                                - <freq1> and <freq2> are in Hz;\n");
+  sendback(filedes,"                                - <sweeptime> is in seconds\n");
+  sendback(filedes,"                                - DC takes only the argument <ampl>;\n");
+  sendback(filedes,"                                - SINE takes only the arguments <ampl>, <offs> and <freq1>;\n");
+  sendback(filedes,"WAVEGENCH? <nch>              : queries the configuration of waveform generator \n");
+  sendback(filedes,"                                channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                the answer will be in the form:\n");
+  sendback(filedes,"                                {OFF|ON|SINGLE} {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
+  
   }
 
 
