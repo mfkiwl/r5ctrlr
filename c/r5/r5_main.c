@@ -12,6 +12,8 @@
 
 #include "r5_main.h"
 
+//#define PROFILE
+#define PRINTOUT
 
 // ##########  globals  #######################
 
@@ -70,7 +72,7 @@ int gTimerIRQoccurred;
 double gFsampl;
 u16    dacval[4];
 s16    adcval[4];
-double g2pi, gPhase, gdPhase, gFreq, gAmpl, gDCval, g_x[4], g_y[4];
+double g2pi, gPhase[4], g_x[4], g_y[4];
 // table of execution times for profiling;
 // entries are <x>, <x^2>, min, max, N_entries
 double time_table[PROFILE_TIME_ENTRIES][5];
@@ -210,14 +212,12 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       break;
 
     // config one wavefrom generator channel
-    case RPMSGCMD_WRITE_WGENCH:
+    case RPMSGCMD_WRITE_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
       
-      d=((R5_RPMSG_TYPE*)data)->data[1];
-      gWavegenChanConfig[nch-1].enable = (int)(d&0x0000FFFF);
-      gWavegenChanConfig[nch-1].type   = (int)((d>>16)&0x0000FFFF);
+      gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       // read floating point values directly as float (32 bit)
       memcpy(&(gWavegenChanConfig[nch-1].ampl), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].offs), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
@@ -227,15 +227,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       break;
     
     // read back config of one wavefrom generator channel
-    case RPMSGCMD_READ_WGENCH:
+    case RPMSGCMD_READ_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
       
-      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGENCH;
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_CONF;
       ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
-      ((R5_RPMSG_TYPE*)data)->data[1] = (((u32)(gWavegenChanConfig[nch-1].type)<<16) &0xFFFF0000) |
-                                        ((u32)(gWavegenChanConfig[nch-1].enable) &0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gWavegenChanConfig[nch-1].type);
       // write floating point values directly as float (32 bit)
       memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gWavegenChanConfig[nch-1].ampl), sizeof(u32));
       memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gWavegenChanConfig[nch-1].offs), sizeof(u32));
@@ -247,11 +246,38 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
-        LPRINTF("WGEN_CH READ incomplete answer transmitted.\n\r");
+        LPRINTF("WGEN CH CONF READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
     
+    // enable/disable one wavefrom generator channel
+    case RPMSGCMD_WRITE_WGEN_CH_EN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // read back on/off state of one wavefrom generator channel
+    case RPMSGCMD_READ_WGEN_CH_EN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_EN;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gWavegenChanConfig[nch-1].enable);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("WGEN CH EN READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
     }
 
   // // use msg to update parameters
@@ -888,6 +914,7 @@ int main()
   unsigned int thereg, theval;
   int          status, i;
   double       currtimer_us, sigma;
+  double       dphase;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -896,11 +923,11 @@ int main()
   // init vars
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
-//  gPhase=0.0;
   gR5ctrlState=R5CTRLR_IDLE;
   for(i=0; i<4; i++)
     {
     g_y[i]=0.;
+    gPhase[i]=0.;
     gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
     gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
     gWavegenChanConfig[i].ampl   = 0.;
@@ -997,24 +1024,35 @@ int main()
         case R5CTRLR_IDLE:
           break;
         case R5CTRLR_WAVEGEN:
+          for(i=0; i<4; i++)
+            {
+            if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_OFF)
+              g_y[i]=0.0;
+            else
+              {
+              //channel is enabled
+              switch(gWavegenChanConfig[i].type)
+                {
+                case WGEN_CH_TYPE_DC:
+                  g_y[i]=gWavegenChanConfig[i].ampl;
+                  break;
+
+                case WGEN_CH_TYPE_SINE:
+                  dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
+                  gPhase[i] += dphase;
+                  if(gPhase[i]>g2pi)
+                    gPhase[i] -= g2pi;
+                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                  break;
+
+                case WGEN_CH_TYPE_SWEEP:
+                  break;
+                }
+              }
+            }
           break;
         }
       
-
-      // // workout next DAC value
-      // gFreq=gLoopParameters.freqHz;
-      // gAmpl=gLoopParameters.percentAmplitude*0.01;
-      // gDCval=gLoopParameters.constValVolt;
-      // gdPhase= g2pi*gFreq/gFsampl;
-      // gPhase += gdPhase;
-      // if(gPhase>g2pi)
-      //   gPhase -= g2pi;
-      // // work out next DAC values with fullscale = 1.0
-      // g_y[0]=gAmpl*sin(gPhase);
-      // g_y[1]=gAmpl*cos(gPhase);
-      // g_y[2]=gAmpl*sin(2.*gPhase);
-      // g_y[3]=gDCval/AD3552_FULLSCALE_VOLT;
-
 
       // register time of end of sine wave calculation
       #ifdef PROFILE
@@ -1047,6 +1085,7 @@ int main()
       // for debug I write the number of timer IRQs at offset 0
       // metal_io_write32(sample_shmem_io, 0, irq_cntr[TIMER_IRQ_CNTR]);
 
+      #ifdef PRINTOUT
       // every now and then print something
       if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= gFsampl)
         {
@@ -1173,8 +1212,9 @@ int main()
           (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_MAX]) );
   
         LPRINTF("\n\r");
-        #endif
+        #endif  // PROFILE
         }
+      #endif  // PRINTOUT
 
       }  // if timer occurred
 

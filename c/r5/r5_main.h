@@ -81,7 +81,6 @@
 #define IPI_CNTR           3
 
 // #defines for time profiling table
-//#define PROFILE
 #define PROFILE_TIME_ENTRIES    10
 #define PROFTIME_AVG             0
 #define PROFTIME_AVG2            1

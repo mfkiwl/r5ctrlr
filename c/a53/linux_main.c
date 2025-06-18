@@ -137,20 +137,27 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       break;
 
     // readback wavefrom generator channel config
-    case RPMSGCMD_READ_WGENCH:
+    case RPMSGCMD_READ_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
       
-      d=((R5_RPMSG_TYPE*)data)->data[1];
-      gWavegenChanConfig[nch-1].enable = (int)(d&0x0000FFFF);
-      gWavegenChanConfig[nch-1].type   = (int)((d>>16)&0x0000FFFF);
+      gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       // read floating point values directly as float (32 bit)
       memcpy(&(gWavegenChanConfig[nch-1].ampl), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].offs), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].f1),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].f2),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].dt),   &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+    // readback wavefrom generator channel on/off state
+    case RPMSGCMD_READ_WGEN_CH_EN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
     }

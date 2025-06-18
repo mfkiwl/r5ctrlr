@@ -471,13 +471,13 @@ void parse_WAVEGEN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
 //-------------------------------------------------------------------
 
-void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
-  int nch,enbl, wtype;
+  int nch, wtype;
   float x;
   int numbytes, rpmsglen, status;
-  char enblstr[16], wtypestr[16];
+  char wtypestr[16];
 
   
   if(rw==SCPI_READ)
@@ -509,12 +509,12 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
     FlushRpmsg();
 
     rpmsglen=sizeof(R5_RPMSG_TYPE);
-    rpmsg_ptr->command = RPMSGCMD_READ_WGENCH;
+    rpmsg_ptr->command = RPMSGCMD_READ_WGEN_CH_CONF;
     rpmsg_ptr->data[0] = (u32)(nch);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
       {
-      snprintf(ans, maxlen, "%s: WAVEGEN chan READ rpmsg_send() failed\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: WAVEGEN CHAN CONF READ rpmsg_send() failed\n", SCPI_ERRS);
       return;
       }
     // now wait for answer
@@ -522,20 +522,6 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
     switch(status)
       {
       case RPMSG_ANSWER_VALID:
-
-        switch(gWavegenChanConfig[nch-1].enable)
-          {
-          case WGEN_CH_ENABLE_OFF:
-            strcpy(enblstr,"OFF");
-            break;
-          case WGEN_CH_ENABLE_ON:
-            strcpy(enblstr,"ON");
-            break;
-          case WGEN_CH_ENABLE_SINGLE:
-            strcpy(enblstr,"SINGLE");
-            break;
-          }
-
         switch(gWavegenChanConfig[nch-1].type)
           {
           case WGEN_CH_TYPE_DC:
@@ -549,9 +535,8 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
             break;
           }
 
-        snprintf(ans, maxlen, "%s: %s %s %g %g %g %g %g\n",
+        snprintf(ans, maxlen, "%s: %s %g %g %g %g %g\n",
                     SCPI_OKS,
-                    enblstr,
                     wtypestr,
                     gWavegenChanConfig[nch-1].ampl,
                     gWavegenChanConfig[nch-1].offs,
@@ -561,10 +546,10 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
                 );
         break;
       case RPMSG_ANSWER_TIMEOUT:
-        snprintf(ans, maxlen, "%s: FSAMPL READ timed out\n", SCPI_ERRS);
+        snprintf(ans, maxlen, "%s: WAVEGEN CH CONFIG READ timed out\n", SCPI_ERRS);
         break;
       case RPMSG_ANSWER_ERR:
-        snprintf(ans, maxlen, "%s: FSAMPL READ error\n", SCPI_ERRS);
+        snprintf(ans, maxlen, "%s: WAVEGEN CH CONFIG READ error\n", SCPI_ERRS);
         break;
       }
 
@@ -593,27 +578,6 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       return;
       }
 
-    // next in line is the ENABLE state (OFF/ON/SINGLE)
-    p=strtok(NULL," ");
-    if(p==NULL)
-      {
-      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
-      return;
-      }
-    if(strcmp(p,"OFF")==0)
-      enbl=WGEN_CH_ENABLE_OFF;
-    else if(strcmp(p,"ON")==0)
-      enbl=WGEN_CH_ENABLE_ON;
-    else if(strcmp(p,"SINGLE")==0)
-      enbl=WGEN_CH_ENABLE_SINGLE;
-    else
-      enbl=-1;
-    
-    if(enbl<0)
-      {
-      snprintf(ans, maxlen, "%s: use ON/OFF/SINGLE for WAVEGEN channel enable state\n", SCPI_ERRS);
-      return;
-      }
 
     // next in line is the waveform TYPE (DC/SINE/SWEEP)
     p=strtok(NULL," ");
@@ -638,9 +602,9 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       }
 
     // start filling the rpmsg with the integer parameters
-    rpmsg_ptr->command = RPMSGCMD_WRITE_WGENCH;
+    rpmsg_ptr->command = RPMSGCMD_WRITE_WGEN_CH_CONF;
     rpmsg_ptr->data[0] = (u32)(nch);
-    rpmsg_ptr->data[1] = ((((u32)(wtype))<<16) &0xFFFF0000) | (((u32)(enbl)) &0x0000FFFF);
+    rpmsg_ptr->data[1] = (u32)(wtype);
 
     // now parse floating point values; 
     // the number of parameters depends on the type of waveform that was requested
@@ -673,9 +637,11 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && x==0.0F)
+      // 0.0 is an acceptable value for the offset;
+      // but in that case strtof returns EIO to signal the underflow
+      if(errno!=0 && errno!=EIO && x==0.0F)
         {
-        snprintf(ans, maxlen, "%s: invalid offset\n", SCPI_ERRS);
+        snprintf(ans, maxlen, "%s: invalid offset (%g; errno=%d)\n", SCPI_ERRS,x,errno);
         return;
         }
       }
@@ -760,9 +726,147 @@ void parse_WAVEGENCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
     rpmsglen=sizeof(R5_RPMSG_TYPE);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: WAVEGENCH WRITE rpmsg_send() failed\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: WAVEGEN CH CONF WRITE rpmsg_send() failed\n", SCPI_ERRS);
     else
-      snprintf(ans, maxlen, "%s: WAVEGEN chan %d updated\n", SCPI_OKS, nch);
+      snprintf(ans, maxlen, "%s: updated config for WAVEGEN chan %d\n", SCPI_OKS, nch);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,enbl;
+  int numbytes, rpmsglen, status;
+  char enblstr[16];
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request waveform generator channel ON/OFF state
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: WAVEGEN channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_WGEN_CH_EN;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: WAVEGEN CHAN EN READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+
+        switch(gWavegenChanConfig[nch-1].enable)
+          {
+          case WGEN_CH_ENABLE_OFF:
+            strcpy(enblstr,"OFF");
+            break;
+          case WGEN_CH_ENABLE_ON:
+            strcpy(enblstr,"ON");
+            break;
+          case WGEN_CH_ENABLE_SINGLE:
+            strcpy(enblstr,"SINGLE");
+            break;
+          }
+
+        snprintf(ans, maxlen, "%s: %s\n", SCPI_OKS, enblstr);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: WAVEGEN CH ENABLE READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: WAVEGEN CH ENABLE READ error\n", SCPI_ERRS);
+        break;
+      }
+
+    }
+  else
+    {
+    // WRITE: enable/disable one waveform generator channel
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid WAVEGEN channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: WAVEGEN channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the ENABLE state (OFF/ON/SINGLE)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"OFF")==0)
+      enbl=WGEN_CH_ENABLE_OFF;
+    else if(strcmp(p,"ON")==0)
+      enbl=WGEN_CH_ENABLE_ON;
+    else if(strcmp(p,"SINGLE")==0)
+      enbl=WGEN_CH_ENABLE_SINGLE;
+    else
+      enbl=-1;
+    
+    if(enbl<0)
+      {
+      snprintf(ans, maxlen, "%s: use ON/OFF/SINGLE for WAVEGEN channel enable state\n", SCPI_ERRS);
+      return;
+      }
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_WGEN_CH_EN;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(enbl);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: WAVEGEN CH EN WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: WAVEGEN chan %d is now %s\n", SCPI_OKS, nch, p);
     }
 
   }
@@ -800,22 +904,24 @@ void printHelp(int filedes)
   sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
   sendback(filedes,"FSAMPL?                       : retrieve sampling frequency (1Hz precision)\n");
   sendback(filedes,"WAVEGEN {OFF|ON}              : start/stop waveform generator mode\n");
-  sendback(filedes,"WAVEGENCH <nch> {OFF|ON|SINGLE} {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
+  sendback(filedes,"WAVEGEN_CH_CONFIG <nch> {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
   sendback(filedes,"                              : configures channel <chan> of the waveform generator;\n");
   sendback(filedes,"                                notes:\n");
   sendback(filedes,"                                - <nch> is in range [1..4];\n");
-  sendback(filedes,"                                - SINGLE can be used only in association with SWEEP;\n");
   sendback(filedes,"                                - <ampl> and <offs> are fraction of the fullscale, so\n");
   sendback(filedes,"                                  <ampl> is in (0,1) and <offs> is in (-1,1) range;\n");
   sendback(filedes,"                                - <freq1> and <freq2> are in Hz;\n");
   sendback(filedes,"                                - <sweeptime> is in seconds\n");
   sendback(filedes,"                                - DC takes only the argument <ampl>;\n");
   sendback(filedes,"                                - SINE takes only the arguments <ampl>, <offs> and <freq1>;\n");
-  sendback(filedes,"WAVEGENCH? <nch>              : queries the configuration of waveform generator \n");
+  sendback(filedes,"WAVEGEN_CH_CONFIG? <nch>      : queries the configuration of waveform generator \n");
   sendback(filedes,"                                channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                the answer will be in the form:\n");
-  sendback(filedes,"                                {OFF|ON|SINGLE} {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
-  
+  sendback(filedes,"                                {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
+  sendback(filedes,"WAVEGEN_CH_ENABLE <nch> {OFF|ON|SINGLE}\n");
+  sendback(filedes,"                              : enables/disables channel <nch> of the waveform generator;\n");
+  sendback(filedes,"                                SINGLE can be used only in association with SWEEP;\n");
+  sendback(filedes,"WAVEGEN_CH_ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
   }
 
 
@@ -860,8 +966,10 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN")==0)
     parse_WAVEGEN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGENCH")==0)
-    parse_WAVEGENCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"WAVEGEN_CH_CONFIG")==0)
+    parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"WAVEGEN_CH_ENABLE")==0)
+    parse_WAVEGEN_CH_ENABLE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);
