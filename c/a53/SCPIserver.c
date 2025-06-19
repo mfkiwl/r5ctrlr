@@ -143,9 +143,24 @@ void parse_STB(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
 
 //-------------------------------------------------------------------
 
-void parse_RST(char *ans, size_t maxlen)
+void parse_RST(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
-  snprintf(ans, maxlen, "%s: pippo pluto paperino\n", SCPI_OKS);        
+  int numbytes, rpmsglen, status;
+  
+  if(rw==SCPI_READ)
+    {
+    snprintf(ans, maxlen, "%s: read operation not supported\n", SCPI_ERRS);        
+    }
+  else
+    {
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_RESET;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: RST rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: controller reset\n", SCPI_OKS);
+    }
   }
 
 
@@ -885,7 +900,7 @@ void printHelp(int filedes)
   sendback(filedes,"Command list:\n\n");
   sendback(filedes,"*IDN?                         : print firmware name and version\n");
   sendback(filedes,"*STB?                         : retrieve current state\n");
-  sendback(filedes,"*RST                          : TODO\n");
+  sendback(filedes,"*RST                          : reset controller\n");
   sendback(filedes,"DAC <ch1> <ch2> <ch3> <ch4>   : write value of all 4 DAC channels;\n");
   sendback(filedes,"                                the values are 16-bit 2's complement integers\n");
   sendback(filedes,"                                in decimal notation; note that the values\n");
@@ -955,7 +970,7 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
   else if(strcmp(p,"*STB")==0)
     parse_STB(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"*RST")==0)
-    parse_RST(ans, maxlen);
+    parse_RST(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"DAC")==0)
     parse_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"DACCH")==0)

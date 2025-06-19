@@ -108,6 +108,7 @@ void GpioISR(void *CallbackRef);
 void FiqHandler(void *cb) __attribute__((section(".tcmb_text")));
 static inline double GetTimer_us(void);
 int SetupAXIGPIO(void);
+void SetSamplingFreq(u32 f);
 int SetupAXItimer(void);
 int SetupIRQs(void);
 int CleanupIRQs(void);
@@ -117,6 +118,7 @@ void SetupExceptions(void);
 static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index);
 void ResetTimeTable(void);
 void AddTimeToTable(int theindex, double thetime);
+void InitVars(void);
 int main(void);
 
 

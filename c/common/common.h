@@ -51,6 +51,7 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_WGEN_CH_CONF  10
 #define RPMSGCMD_WRITE_WGEN_CH_EN   11
 #define RPMSGCMD_READ_WGEN_CH_EN    12
+#define RPMSGCMD_RESET              13
 
 // R5 application state
 #define R5CTRLR_IDLE     0

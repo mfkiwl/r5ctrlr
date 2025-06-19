@@ -91,7 +91,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)src;    // avoid warning on unused parameter
   (void)ept;    // avoid warning on unused parameter
 
-  u32 cmd, d, timerScaler;
+  u32 cmd, d;
   int i, numbytes, rpmsglen, ret, nch;
   double dval;
 
@@ -167,12 +167,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     // change sampling frequency
     case RPMSGCMD_WRITE_FSAMPL:
       d=((R5_RPMSG_TYPE*)data)->data[0];
-      // set timer period
-      XTmrCtr_SetResetValue(&theTimer, TIMER_NUMBER, (u32)(gTimerConfig->SysClockFreqHz/d));
-      // the actual sampling frequency is truncated to an integer fraction of timer clock (125 MHz);
-      // let's retrieve it
-      timerScaler=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
-      gFsampl=gTimerConfig->SysClockFreqHz/(1.0*timerScaler);
+      SetSamplingFreq(d);
       break;
 
     // send current sampling frequency
@@ -308,6 +303,13 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
+
+    // reset
+    case RPMSGCMD_RESET:
+      InitVars();
+      SetSamplingFreq((u32)gFsampl);
+      break;
+
     }
 
   return RPMSG_SUCCESS;
@@ -679,8 +681,7 @@ int SetupAXItimer(void)
           XTC_INT_MODE_OPTION | XTC_AUTO_RELOAD_OPTION | XTC_DOWN_COUNT_OPTION);
 
   // set timer period
-  XTmrCtr_SetResetValue(&theTimer, TIMER_NUMBER,
-          (u32)(gTimerConfig->SysClockFreqHz/gFsampl));
+  SetSamplingFreq((u32)gFsampl);
   
   //loadreg=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
   //LPRINTF("Timer period= %f s = %u counts\n\r", loadreg/(1.*gTimerConfig->SysClockFreqHz), loadreg);
@@ -690,6 +691,21 @@ int SetupAXItimer(void)
   gTimerIRQoccurred=0;
 
   return XST_SUCCESS;
+  }
+
+
+// -----------------------------------------------------------
+
+void SetSamplingFreq(u32 f)
+  {
+  u32 timerScaler;
+
+  // set timer period
+  XTmrCtr_SetResetValue(&theTimer, TIMER_NUMBER, (u32)(gTimerConfig->SysClockFreqHz/f));
+  // the actual sampling frequency is truncated to an integer fraction of timer clock (125 MHz);
+  // let's retrieve it
+  timerScaler=XTmrCtr_ReadReg(theTimer.BaseAddress, TIMER_NUMBER, XTC_TLR_OFFSET);
+  gFsampl=gTimerConfig->SysClockFreqHz/(1.0*timerScaler);
   }
 
 
@@ -929,19 +945,13 @@ void AddTimeToTable(int theindex, double thetime)
   time_table[theindex][PROFTIME_AVG2] = time_table[theindex][PROFTIME_AVG2] *(N-1)/N + thetime*thetime/N;
   }
 
+
 // -----------------------------------------------------------
 
-int main()
+void InitVars(void)
   {
-  unsigned int thereg, theval;
-  int          status, i;
-  double       currtimer_us, sigma;
-  double       dphase, alpha, dfreq;
+  int i;
 
-  // remove buffering from stdin and stdout
-  setvbuf (stdout, NULL, _IONBF, 0);
-  setvbuf (stdin, NULL, _IONBF, 0);
-  
   // init vars
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
@@ -966,6 +976,22 @@ int main()
   last_irq_cnt=0;
   for(i=0; i<4; i++)
     irq_cntr[i]=0;
+  }
+
+// -----------------------------------------------------------
+
+int main()
+  {
+  unsigned int thereg, theval;
+  int          status, i;
+  double       currtimer_us, sigma;
+  double       dphase, alpha, dfreq;
+
+  // remove buffering from stdin and stdout
+  setvbuf (stdout, NULL, _IONBF, 0);
+  setvbuf (stdin, NULL, _IONBF, 0);
+  
+  InitVars();
 
   // init profiling time table
   ResetTimeTable();
@@ -1068,8 +1094,8 @@ int main()
                     gTotSweepSamples[i]=gWavegenChanConfig[i].dt*gFsampl;
                     }
 
-                  gFreq[i] += alpha/gFsampl;
-                  dphase    = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
+                  gFreq[i]  += alpha/gFsampl;
+                  dphase     = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
                   gPhase[i] += dphase;
                   if(gPhase[i]>g2pi)
                     gPhase[i] -= g2pi;
