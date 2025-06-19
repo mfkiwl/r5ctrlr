@@ -21,7 +21,6 @@ void *gplatform;
 // openamp
 static struct rpmsg_endpoint lept;
 static int shutdown_req = 0;
-//static LOOP_PARAM_TYPE gLoopParameters;
 struct rpmsg_device *rpdev;
 
 // Polling information used by remoteproc operations.
@@ -72,13 +71,15 @@ int gTimerIRQoccurred;
 double gFsampl;
 u16    dacval[4];
 s16    adcval[4];
-double g2pi, gPhase[4], g_x[4], g_y[4];
+double g_x[4], g_y[4];
+double g2pi, gPhase[4], gFreq[4];
+int gR5ctrlState;
+WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
+unsigned long gTotSweepSamples[4], gCurSweepSamples[4];
+
 // table of execution times for profiling;
 // entries are <x>, <x^2>, min, max, N_entries
 double time_table[PROFILE_TIME_ENTRIES][5];
-
-int gR5ctrlState;
-WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 
 
 // ##########  implementation  ################
@@ -91,7 +92,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)ept;    // avoid warning on unused parameter
 
   u32 cmd, d, timerScaler;
-  int numbytes, rpmsglen, ret, nch;
+  int i, numbytes, rpmsglen, ret, nch;
   double dval;
 
   // update the total number of received messages, for debug purposes
@@ -191,6 +192,16 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     // start or stop WAVEFORM GENERATOR mode
     case RPMSGCMD_WGEN_ONOFF:
       d=((R5_RPMSG_TYPE*)data)->data[0];
+      
+      // reset sweep counters every time we get this command
+      for(i=0; i<4; i++)
+        {
+        gPhase[i]=0.;
+        gFreq[i]=0.;
+        gTotSweepSamples[i]=0;
+        gCurSweepSamples[i]=0;
+        }
+      
       if(d==0)
         gR5ctrlState=R5CTRLR_IDLE;
       else
@@ -224,6 +235,16 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gWavegenChanConfig[nch-1].f1),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].f2),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
       memcpy(&(gWavegenChanConfig[nch-1].dt),   &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+
+      // reset sweep counters every time we get this command
+      for(i=0; i<4; i++)
+        {
+        gPhase[i]=0.;
+        gFreq[i]=0.;
+        gTotSweepSamples[i]=0;
+        gCurSweepSamples[i]=0;
+        }
+
       break;
     
     // read back config of one wavefrom generator channel
@@ -257,6 +278,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
       
+      // reset sweep counters every time we get this command
+      for(i=0; i<4; i++)
+        {
+        gPhase[i]=0.;
+        gFreq[i]=0.;
+        gTotSweepSamples[i]=0;
+        gCurSweepSamples[i]=0;
+        }
+
       gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
@@ -279,14 +309,6 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
     }
-
-  // // use msg to update parameters
-  // if(len<sizeof(LOOP_PARAM_MSG_TYPE))
-  //   {
-  //   LPRINTF("incomplete message received.\n\r");
-  //   return RPMSG_ERR_BUFF_SIZE;
-  //   }
-  // memcpy(&gLoopParameters, data, sizeof(LOOP_PARAM_MSG_TYPE));
 
   return RPMSG_SUCCESS;
 }
@@ -914,7 +936,7 @@ int main()
   unsigned int thereg, theval;
   int          status, i;
   double       currtimer_us, sigma;
-  double       dphase;
+  double       dphase, alpha, dfreq;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -928,6 +950,9 @@ int main()
     {
     g_y[i]=0.;
     gPhase[i]=0.;
+    gFreq[i]=0.;
+    gTotSweepSamples[i]=0;
+    gCurSweepSamples[i]=0;
     gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
     gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
     gWavegenChanConfig[i].ampl   = 0.;
@@ -941,11 +966,6 @@ int main()
   last_irq_cnt=0;
   for(i=0; i<4; i++)
     irq_cntr[i]=0;
-
-  // // init sample loop parameters
-  // gLoopParameters.freqHz=1000.f;
-  // gLoopParameters.percentAmplitude=75;
-  // gLoopParameters.constValVolt=3.5f;
 
   // init profiling time table
   ResetTimeTable();
@@ -976,21 +996,6 @@ int main()
   while(!shutdown_req)
     {
     // remember you can't use sscanf in the main loop, to avoid loosing RPMSGs
-
-    // LPRINTF("\n\rTimer   IRQs            : %d\n\r",irq_cntr[TIMER_IRQ_CNTR]);
-    // LPRINTF(    "GPIO    IRQs            : %d\n\r",irq_cntr[GPIO_IRQ_CNTR]);
-    // LPRINTF(    "RegBank IRQs            : %d\n\r",irq_cntr[REGBANK_IRQ_CNTR]);
-    // LPRINTF(    "RPMSG   IPIs            : %d\n\r",irq_cntr[IPI_CNTR]);
-    // LPRINTF(    "Loop Parameter 1 (float): %d.%03d \n\r",
-    //     (int)(gLoopParameters.param1),
-    //     DECIMALS(gLoopParameters.param1,3));
-    // LPRINTF(    "Loop Parameter 2 (int)  : %d\n\r",gLoopParameters.param2);
-    // LPRINTF(    "Timer IRQ latency (ns)  : current= %d ; max= %d\n\r", (int)(gTimerIRQlatency*1.e9), (int)(gMaxLatency*1.e9));
-    // // can't use sscanf in the main loop, to avoid loosing RPMSGs,
-    // // so I print all the registers each time I get an IRQ,
-    // // which is at least once a second from the timer IRQ
-    // for(thereg=0; thereg<16; thereg++)
-    //   LPRINTF(  "Regbank[%02d]             : 0x%08X\n\r",(int)(thereg), *(REGBANK+thereg));
 
     _rproc_wait();
     // check whether we have a message from A53/linux
@@ -1023,6 +1028,7 @@ int main()
         {
         case R5CTRLR_IDLE:
           break;
+        
         case R5CTRLR_WAVEGEN:
           for(i=0; i<4; i++)
             {
@@ -1038,14 +1044,56 @@ int main()
                   break;
 
                 case WGEN_CH_TYPE_SINE:
+                  // output current phase
+                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                  // calculate next phase
                   dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
                   gPhase[i] += dphase;
                   if(gPhase[i]>g2pi)
                     gPhase[i] -= g2pi;
-                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
                   break;
 
                 case WGEN_CH_TYPE_SWEEP:
+                  // output current phase
+                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                  // calculate next phase
+                  if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
+                    {
+                    alpha=0;
+                    gTotSweepSamples[i]=0;
+                    }
+                  else 
+                    {
+                    alpha=((double)(gWavegenChanConfig[i].f2)-gWavegenChanConfig[i].f1)/gWavegenChanConfig[i].dt;
+                    gTotSweepSamples[i]=gWavegenChanConfig[i].dt*gFsampl;
+                    }
+
+                  gFreq[i] += alpha/gFsampl;
+                  dphase    = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
+                  gPhase[i] += dphase;
+                  if(gPhase[i]>g2pi)
+                    gPhase[i] -= g2pi;
+                  
+                  // check sweep status
+                  gCurSweepSamples[i]++;
+                  if(gCurSweepSamples[i]>=gTotSweepSamples[i])
+                    {
+                    // end of sweep
+                    if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_SINGLE)
+                      {
+                      // stop after a single sweep
+                      gWavegenChanConfig[i].enable=WGEN_CH_ENABLE_OFF;
+                      gPhase[i]=0.;
+                      gFreq[i]=0.;
+                      }
+                    else
+                      {
+                      // sweep forever: restart from f1
+                      gPhase[i]=0.;
+                      gFreq[i]=0.;
+                      gCurSweepSamples[i]=0;                      
+                      }
+                    }
                   break;
                 }
               }
@@ -1183,6 +1231,16 @@ int main()
                     (int)(gWavegenChanConfig[i].dt),
                     DECIMALS(gWavegenChanConfig[i].dt,3)
                    );
+
+            // // print alpha for debug
+            // if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
+            //   alpha=0;
+            // else 
+            //   alpha=((double)(gWavegenChanConfig[i].f2)-gWavegenChanConfig[i].f1)/gWavegenChanConfig[i].dt;
+            // LPRINTF(" alpha= %3d.%010d ",
+            //         (int)(alpha),
+            //         DECIMALS(alpha,10)
+            //        );
 
             LPRINTF("\n\r");
             }

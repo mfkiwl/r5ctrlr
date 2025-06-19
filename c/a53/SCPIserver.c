@@ -904,7 +904,7 @@ void printHelp(int filedes)
   sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
   sendback(filedes,"FSAMPL?                       : retrieve sampling frequency (1Hz precision)\n");
   sendback(filedes,"WAVEGEN {OFF|ON}              : start/stop waveform generator mode\n");
-  sendback(filedes,"WAVEGEN_CH_CONFIG <nch> {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
+  sendback(filedes,"WAVEGEN:CH_CONFIG <nch> {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
   sendback(filedes,"                              : configures channel <chan> of the waveform generator;\n");
   sendback(filedes,"                                notes:\n");
   sendback(filedes,"                                - <nch> is in range [1..4];\n");
@@ -914,14 +914,14 @@ void printHelp(int filedes)
   sendback(filedes,"                                - <sweeptime> is in seconds\n");
   sendback(filedes,"                                - DC takes only the argument <ampl>;\n");
   sendback(filedes,"                                - SINE takes only the arguments <ampl>, <offs> and <freq1>;\n");
-  sendback(filedes,"WAVEGEN_CH_CONFIG? <nch>      : queries the configuration of waveform generator \n");
+  sendback(filedes,"WAVEGEN:CH_CONFIG? <nch>      : queries the configuration of waveform generator \n");
   sendback(filedes,"                                channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                the answer will be in the form:\n");
   sendback(filedes,"                                {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
-  sendback(filedes,"WAVEGEN_CH_ENABLE <nch> {OFF|ON|SINGLE}\n");
+  sendback(filedes,"WAVEGEN:CH_ENABLE <nch> {OFF|ON|SINGLE}\n");
   sendback(filedes,"                              : enables/disables channel <nch> of the waveform generator;\n");
   sendback(filedes,"                                SINGLE can be used only in association with SWEEP;\n");
-  sendback(filedes,"WAVEGEN_CH_ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
+  sendback(filedes,"WAVEGEN:CH_ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
   }
 
 
@@ -966,9 +966,9 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN")==0)
     parse_WAVEGEN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGEN_CH_CONFIG")==0)
+  else if(strcmp(p,"WAVEGEN:CH_CONFIG")==0)
     parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGEN_CH_ENABLE")==0)
+  else if(strcmp(p,"WAVEGEN:CH_ENABLE")==0)
     parse_WAVEGEN_CH_ENABLE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
