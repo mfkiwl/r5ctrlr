@@ -72,8 +72,6 @@
 // AXI timer has 2 timers; we only use the first one, timer#0
 #define TIMER_NUMBER           0
 
-// frequency of the timer interrupt:
-#define DEFAULT_TIMER_FREQ_HZ       10.e3
 // #defines for IRQ counter
 #define TIMER_IRQ_CNTR     0
 #define GPIO_IRQ_CNTR      1

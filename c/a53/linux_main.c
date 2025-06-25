@@ -27,6 +27,8 @@ s16 g_adcval[4], g_dacval[4];
 u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
 int gR5ctrlState;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
+TRIG_CONFIG gRecorderConfig;
+
 
 
 struct remoteproc_priv rproc_priv = 
@@ -158,6 +160,29 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         return RPMSG_ERR_PARAM;
       
       gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback trigger state
+    case RPMSGCMD_READ_TRIG:
+      gRecorderConfig.state=(int)( ((R5_RPMSG_TYPE*)data)->data[0] );
+      break;
+    
+    // readback trigger setup
+    case RPMSGCMD_READ_TRIG_CFG:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      else
+        gRecorderConfig.trig_chan=nch;
+      
+      gRecorderConfig.mode=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      // if trigger mode is SLOPE, we need to read the other parameters
+      if(gRecorderConfig.mode == RECORDER_SLOPE)
+        {
+        gRecorderConfig.slopedir = (int)(((R5_RPMSG_TYPE*)data)->data[2]);
+        // read floating point values directly as float (32 bit)
+        memcpy(&(gRecorderConfig.level), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+        }
       break;
 
     }
@@ -351,7 +376,13 @@ int main(int argc, char *argv[])
   // init vars
   gR5ctrlState=R5CTRLR_IDLE;
   gIncomingRpmsgs=0;
-  gFsampl=10000;  // 10 kHz default Fsampling
+  gFsampl=DEFAULT_TIMER_FREQ_HZ;  // 10 kHz default Fsampling
+  gRecorderConfig.state=RECORDER_IDLE;
+  gRecorderConfig.trig_chan=1;
+  gRecorderConfig.mode=RECORDER_SLOPE;
+  gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
+  gRecorderConfig.level=0.;
+
   for (i=0; i<4; i++)
     {
     g_adcval[i]=0;

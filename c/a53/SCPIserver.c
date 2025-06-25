@@ -84,7 +84,7 @@ void parse_IDN(char *ans, size_t maxlen)
   
   trimstring(prod);
   trimstring(ver);
-  snprintf(ans, maxlen, "%s - version %s\n", prod, ver);
+  snprintf(ans, maxlen, "%s: %s - version %s\n", SCPI_OKS, prod, ver);
   }
 
 
@@ -889,14 +889,286 @@ void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
 
 //-------------------------------------------------------------------
 
+void parse_TRIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int trigstate;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_TRIG;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: TRIG READ rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      {
+      // now wait for answer
+      status=WaitForRpmsg();
+      switch(status)
+        {
+        case RPMSG_ANSWER_VALID:
+          // print current state
+          switch(gRecorderConfig.state)
+            {
+            case RECORDER_IDLE:
+              snprintf(ans, maxlen, "%s: IDLE is recorder state\n", SCPI_OKS);
+              break;
+            case RECORDER_FORCE:
+            case RECORDER_ARMED:
+              snprintf(ans, maxlen, "%s: ARMED is recorder state\n", SCPI_OKS);
+              break;
+            case RECORDER_ACQUIRING:
+              snprintf(ans, maxlen, "%s: ACQUIRING is recorder state\n", SCPI_OKS);
+              break;
+            }
+          break;
+        case RPMSG_ANSWER_TIMEOUT:
+          snprintf(ans, maxlen, "%s: TRIG READ timed out\n", SCPI_ERRS);
+          break;
+        case RPMSG_ANSWER_ERR:
+          snprintf(ans, maxlen, "%s: TRIG READ error\n", SCPI_ERRS);
+          break;
+        }
+      }    
+    }
+  else
+    {
+    // ARM/DISARM trigger
+
+    // next in line is ARM/FORCE/OFF
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      if(strcmp(p,"ARM")==0)
+        trigstate=RECORDER_ARMED;
+      else if(strcmp(p,"FORCE")==0)
+        trigstate=RECORDER_FORCE;
+      else if(strcmp(p,"OFF")==0)
+        trigstate=RECORDER_IDLE;
+      else
+        trigstate=-1;
+      
+      if(trigstate>=0)
+        {
+        // send rpmsg to R5
+        rpmsglen=sizeof(R5_RPMSG_TYPE);
+        rpmsg_ptr->command = RPMSGCMD_WRITE_TRIG;
+        rpmsg_ptr->data[0]=(u32)trigstate;
+        numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+        if(numbytes<rpmsglen)
+          snprintf(ans, maxlen, "%s: TRIG WRITE rpmsg_send() failed\n", SCPI_ERRS);
+        else
+          snprintf(ans, maxlen, "%s: TRIGGER state updated\n", SCPI_OKS);
+        }
+      else
+        {
+        snprintf(ans, maxlen, "%s: use ARM/FORCE/OFF with RECORD:TRIG command\n", SCPI_ERRS);
+        }        
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing ARM/FORCE/OFF option\n", SCPI_ERRS);
+      }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int trigch, trigmode,slope;
+  float lvl;
+  int numbytes, rpmsglen, status;
+  char modestr[16],slopestr[16];
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request trigger setup
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_TRIG_CFG;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: TRIG setup READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        switch(gRecorderConfig.mode)
+          {
+          case RECORDER_SWEEP:
+            strcpy(modestr,"SWEEP");
+            break;
+          case RECORDER_SLOPE:
+            strcpy(modestr,"SLOPE");
+            break;
+          }
+        if(gRecorderConfig.mode == RECORDER_SWEEP)
+          {
+          // if trig mode is SWEEP, we are done
+          snprintf(ans, maxlen, "%s: %d %s\n", SCPI_OKS, gRecorderConfig.trig_chan, modestr);
+          }
+        else
+          {
+          // if trig mode is SLOPE, we need to read the other parameters
+          switch(gRecorderConfig.slopedir)
+            {
+            case RECORDER_SLOPE_RISING:
+              strcpy(slopestr,"RISING");
+              break;
+            case RECORDER_SLOPE_FALLING:
+              strcpy(slopestr,"FALLING");
+              break;
+            }
+          snprintf(ans, maxlen, "%s: %d %s %s %g\n", SCPI_OKS, 
+                                     gRecorderConfig.trig_chan, modestr, slopestr, gRecorderConfig.level);
+          }
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: TRIG setup READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: TRIG setup READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: configure trigger
+
+    // next in line is the trigger channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing TRIG channel number\n", SCPI_ERRS);
+      return;
+      }
+    trigch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && trigch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid TRIG channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((trigch<1)||(trigch>4))
+      {
+      snprintf(ans, maxlen, "%s: TRIG channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+
+    // next in line is the trigger mode (SLOPE/SWEEP)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing TRIG MODE (SLOPE/SWEEP)\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"SLOPE")==0)
+      trigmode=RECORDER_SLOPE;
+    else if(strcmp(p,"SWEEP")==0)
+      trigmode=RECORDER_SWEEP;
+    else
+      trigmode=-1;
+    
+    if(trigmode<0)
+      {
+      snprintf(ans, maxlen, "%s: use SLOPE/SWEEP as TRIG mode\n", SCPI_ERRS);
+      return;
+      }
+
+    // start filling the rpmsg with the integer parameters
+    rpmsg_ptr->command = RPMSGCMD_WRITE_TRIG_CFG;
+    rpmsg_ptr->data[0] = (u32)(trigch);
+    rpmsg_ptr->data[1] = (u32)(trigmode);
+
+    if(trigmode==RECORDER_SWEEP)
+      {
+      // if trig mode is SWEEP, we are done
+      rpmsg_ptr->data[2] = 0;
+      rpmsg_ptr->data[3] = 0;
+      }
+    else
+      {
+      // if trig mode is SLOPE, we need to read the other parameters
+
+      // next in line is slope direction (RISING/FALLING)
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing slope direction (RISING/FALLING)\n", SCPI_ERRS);
+        return;
+        }
+      if(strcmp(p,"RISING")==0)
+        slope=RECORDER_SLOPE_RISING;
+      else if(strcmp(p,"FALLING")==0)
+        slope=RECORDER_SLOPE_FALLING;
+      else
+        slope=-1;
+      
+      if(slope<0)
+        {
+        snprintf(ans, maxlen, "%s: use SLOPE/SWEEP as TRIG mode\n", SCPI_ERRS);
+        return;
+        }
+
+      rpmsg_ptr->data[2] = (u32)(slope);
+
+      // next in line is trigger level
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing TRIG level\n", SCPI_ERRS);
+        return;
+        }
+      lvl=strtof(p, NULL);
+      if(errno!=0 && lvl==0.0F)
+        {
+        snprintf(ans, maxlen, "%s: invalid TRIG level\n", SCPI_ERRS);
+        return;
+        }
+  
+      // write floating point values directly as float (32 bit)
+      memcpy(&(rpmsg_ptr->data[3]), &lvl, sizeof(u32));
+      }
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: TRIG CONF WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: updated TRIG configuration\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void printHelp(int filedes)
   {
   sendback(filedes,"R5 controller SCPI server commands\n\n");
-  sendback(filedes,"Server support multiple concurrent clients\n");
+  sendback(filedes,"Server supports multiple concurrent clients\n");
   sendback(filedes,"Server is case insensitive\n");
-  sendback(filedes,"Numbers can be decimal or hex, with the 0x prefix\n");
+  sendback(filedes,"Numbers are decimal\n");
   sendback(filedes,"Server answers with OK or ERR, a colon and a descriptive message\n");
-  sendback(filedes,"Send CTRL-D to close the connection\n\n");
+  sendback(filedes,"Send CTRL-C (CTRL-D on windows) to close the connection\n\n");
   sendback(filedes,"Command list:\n\n");
   sendback(filedes,"*IDN?                         : print firmware name and version\n");
   sendback(filedes,"*STB?                         : retrieve current state\n");
@@ -937,6 +1209,14 @@ void printHelp(int filedes)
   sendback(filedes,"                              : enables/disables channel <nch> of the waveform generator;\n");
   sendback(filedes,"                                SINGLE can be used only in association with SWEEP;\n");
   sendback(filedes,"WAVEGEN:CH_ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
+  sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
+  sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
+  sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
+  sendback(filedes,"                                - FORCE commands an immediate start of the recording\n");
+  sendback(filedes,"                                - OFF   stops recording\n");
+  sendback(filedes,"RECORD:TRIGger?               : depending on the recorder state, it returns\n");
+  sendback(filedes,"                                {ARMED|ACQUIRING|IDLE}\n");
+
   }
 
 
@@ -985,6 +1265,10 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN:CH_ENABLE")==0)
     parse_WAVEGEN_CH_ENABLE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
+    parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )
+    parse_TRIGSETUP(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);

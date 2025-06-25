@@ -75,6 +75,7 @@ double g_x[4], g_y[4];
 double g2pi, gPhase[4], gFreq[4];
 int gR5ctrlState;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
+TRIG_CONFIG gRecorderConfig;
 unsigned long gTotSweepSamples[4], gCurSweepSamples[4];
 
 // table of execution times for profiling;
@@ -128,7 +129,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch>=1)&&(nch<=4))
         g_y[nch-1]=dval;
       else
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACCH index out of range\n\r");
         return RPMSG_ERR_PARAM;
+        }
       break;
 
     // read back DAC values to linux
@@ -221,7 +225,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_WRITE_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_WGEN_CH_CONF index out of range\n\r");
         return RPMSG_ERR_PARAM;
+        }
       
       gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       // read floating point values directly as float (32 bit)
@@ -246,7 +253,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_WGEN_CH_CONF index out of range\n\r");
         return RPMSG_ERR_PARAM;
+        }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_CONF;
       ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
@@ -271,7 +281,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_WRITE_WGEN_CH_EN:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_WGEN_CH_EN index out of range\n\r");
         return RPMSG_ERR_PARAM;
+        }
       
       // reset sweep counters every time we get this command
       for(i=0; i<4; i++)
@@ -289,7 +302,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_WGEN_CH_EN:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_WGEN_CH_EN index out of range\n\r");
         return RPMSG_ERR_PARAM;
+        }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_EN;
       ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
@@ -308,6 +324,64 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_RESET:
       InitVars();
       SetSamplingFreq((u32)gFsampl);
+      break;
+
+    // set trigger state
+    case RPMSGCMD_WRITE_TRIG:
+      gRecorderConfig.state=(int)( ((R5_RPMSG_TYPE*)data)->data[0] );
+      break;
+
+    // readback trigger state
+    case RPMSGCMD_READ_TRIG:
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_TRIG;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)gRecorderConfig.state;
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("TRIG READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+    // setup trigger
+    case RPMSGCMD_WRITE_TRIG_CFG:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_TRIG_CFG index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      gRecorderConfig.trig_chan=nch;
+      gRecorderConfig.mode= (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      // if trigger mode is SLOPE, we need to read the other parameters
+      if(gRecorderConfig.mode == RECORDER_SLOPE)
+        {
+        gRecorderConfig.slopedir = (int)(((R5_RPMSG_TYPE*)data)->data[2]);
+        // read floating point values directly as float (32 bit)
+        memcpy(&(gRecorderConfig.level), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+        }
+      break;
+    
+    // read back trigger setup
+    case RPMSGCMD_READ_TRIG_CFG:
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_TRIG_CFG;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)gRecorderConfig.trig_chan;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)gRecorderConfig.mode;
+      // if trigger mode is SLOPE, we don't need to send the other parameters, but we do anyway
+      ((R5_RPMSG_TYPE*)data)->data[2] = (u32)gRecorderConfig.slopedir;
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gRecorderConfig.level), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("TRIG setup READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
       break;
 
     }
@@ -956,6 +1030,11 @@ void InitVars(void)
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
   gR5ctrlState=R5CTRLR_IDLE;
+  gRecorderConfig.state=RECORDER_IDLE;
+  gRecorderConfig.trig_chan=1;
+  gRecorderConfig.mode=RECORDER_SLOPE;
+  gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
+  gRecorderConfig.level=0.;
   for(i=0; i<4; i++)
     {
     g_y[i]=0.;

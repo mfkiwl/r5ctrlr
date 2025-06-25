@@ -37,6 +37,9 @@ typedef    int16_t s16;
 //---------- openamp stuff -------------------------
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"
 
+// frequency of the timer interrupt:
+#define DEFAULT_TIMER_FREQ_HZ       10.e3
+
 // commands from linux to R5
 #define RPMSGCMD_NOP                 0
 #define RPMSGCMD_WRITE_DAC           1
@@ -52,10 +55,26 @@ typedef    int16_t s16;
 #define RPMSGCMD_WRITE_WGEN_CH_EN   11
 #define RPMSGCMD_READ_WGEN_CH_EN    12
 #define RPMSGCMD_RESET              13
+#define RPMSGCMD_WRITE_TRIG         14
+#define RPMSGCMD_READ_TRIG          15
+#define RPMSGCMD_WRITE_TRIG_CFG     16
+#define RPMSGCMD_READ_TRIG_CFG      17
 
 // R5 application state
 #define R5CTRLR_IDLE     0
 #define R5CTRLR_WAVEGEN  1
+
+// recorder state
+#define RECORDER_IDLE          0
+#define RECORDER_FORCE         1
+#define RECORDER_ARMED         2
+#define RECORDER_ACQUIRING     3
+// recorder mode
+#define RECORDER_SWEEP         0
+#define RECORDER_SLOPE         1
+// recorder slope type
+#define RECORDER_SLOPE_RISING  0
+#define RECORDER_SLOPE_FALLING 1
 
 // wave generator channel config
 #define WGEN_CH_ENABLE_OFF       0
@@ -74,6 +93,15 @@ typedef struct
   int    type;     // DC/SINE/SWEEP
   float  ampl, offs, f1, f2, dt;
   } WAVEGEN_CH_CONFIG;
+
+typedef struct
+  {
+  int    state;     // IDLE/FORCE/ARMED/ACQUIRING
+  int    mode;      // SWEEP/SLOPE
+  int    trig_chan; // in range [1,4]
+  int    slopedir;  // RISING/FALLING
+  float  level;
+  } TRIG_CONFIG;
 
 typedef struct rpmsg_endpoint RPMSG_ENDP_TYPE;
 
