@@ -633,7 +633,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       return;
       }
     x=strtof(p, NULL);
-    if(errno!=0 && x==0.0F)
+    if(errno!=0 && errno!=EIO && x==0.0F)
       {
       snprintf(ans, maxlen, "%s: invalid amplitude\n", SCPI_ERRS);
       return;
@@ -678,7 +678,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && x==0.0F)
+      if(errno!=0 && errno!=EIO && x==0.0F)
         {
         snprintf(ans, maxlen, "%s: invalid frequency\n", SCPI_ERRS);
         return;
@@ -701,7 +701,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && x==0.0F)
+      if(errno!=0 && errno!=EIO && x==0.0F)
         {
         snprintf(ans, maxlen, "%s: invalid end frequency\n", SCPI_ERRS);
         return;
@@ -724,7 +724,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && x==0.0F)
+      if(errno!=0 && errno!=EIO && x==0.0F)
         {
         snprintf(ans, maxlen, "%s: invalid sweep time\n", SCPI_ERRS);
         return;
@@ -1137,7 +1137,7 @@ void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
         return;
         }
       lvl=strtof(p, NULL);
-      if(errno!=0 && lvl==0.0F)
+      if(errno!=0 && errno!=EIO && lvl==0.0F)
         {
         snprintf(ans, maxlen, "%s: invalid TRIG level\n", SCPI_ERRS);
         return;
