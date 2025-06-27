@@ -1161,6 +1161,34 @@ void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
 
 //-------------------------------------------------------------------
 
+void printSamples(int filedes)
+  {
+  char  s[256];
+  unsigned long nsampl;
+  int i,j;
+  s16 sampl;
+
+  nsampl=metal_io_read32(sample_shmem_io, 0);
+  if(nsampl>MAX_SHM_SAMPLES)
+    nsampl=MAX_SHM_SAMPLES;
+  snprintf(s,256,"%s: %d total samples\n", SCPI_OKS, nsampl);
+  sendback(filedes,s);
+
+  for(i=0;i<nsampl; i++)
+    {
+    for(j=0;j<4; j++)
+      {
+      sampl=metal_io_read16(sample_shmem_io, SAMPLE_SHM_HEADER_LEN+i*8+j*2);
+      snprintf(s,256,"%8d  ", sampl);
+      sendback(filedes,s);
+      }
+    sendback(filedes,"\n");
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
 void printHelp(int filedes)
   {
   sendback(filedes,"R5 controller SCPI server commands\n\n");
@@ -1216,6 +1244,22 @@ void printHelp(int filedes)
   sendback(filedes,"                                - OFF   stops recording\n");
   sendback(filedes,"RECORD:TRIGger?               : depending on the recorder state, it returns\n");
   sendback(filedes,"                                {ARMED|ACQUIRING|IDLE}\n");
+  sendback(filedes,"RECORD:TRIGger:SETUP <trig_ch> SLOPE {RISING|FALLING) <level>\n");
+  sendback(filedes,"                              : setup the recorder trigger; <trig_ch> is in range [1..4];\n");
+  sendback(filedes,"                                <level> is a fraction of the fullscale, i.e a number <1\n");
+  sendback(filedes,"                                in magnitude\n");
+  sendback(filedes,"RECORD:TRIGger:SETUP <trig_ch> SWEEP\n");
+  sendback(filedes,"                              : the recorder is configured to trigger as soon as the\n");
+  sendback(filedes,"                                waveform generator is started; <trig_ch> is actually ignored.\n");
+  sendback(filedes,"                                It is called 'SWEEP' mode because it can be used to draw\n");
+  sendback(filedes,"                                Bode diagrams when one of the waveform generator channels\n");
+  sendback(filedes,"                                is used to feed a sweep into a system under test\n");
+  sendback(filedes,"RECORD:SAMPLES?               : retrieve the recored samples; use after a successful trigger,\n");
+  sendback(filedes,"                                when the RECORD:TRIGger? reports an IDLE state, signaling the end\n");
+  sendback(filedes,"                                of an acquisition.\n");
+  sendback(filedes,"                                The answer is a first line with the total number of samples,\n");
+  sendback(filedes,"                                then one line per sample with all four ADC channels printed\n");
+  sendback(filedes,"                                as decimal 16-bit signed integers; first value is first ADC channel\n");
 
   }
 
@@ -1269,6 +1313,11 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )
     parse_TRIGSETUP(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"RECORD:SAMPLES")==0)
+    {
+    printSamples(filedes);
+    *ans=0;
+    }
   else if(strcmp(p,"HELP")==0)
     {
     printHelp(filedes);

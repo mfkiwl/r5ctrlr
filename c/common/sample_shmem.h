@@ -37,6 +37,9 @@
 #define SAMPLE_SHM_DEVNAME     "3ed80000.shm"
 #define SAMPLE_SHM_BADDR       0x3ED80000
 #define SAMPLE_SHM_SIZE           0x20000
+#define SAMPLE_SHM_HEADER_LEN  8
+// max # of samples for each channel:
+#define MAX_SHM_SAMPLES        ((SAMPLE_SHM_SIZE-SAMPLE_SHM_HEADER_LEN)/(4*2))
 
 // ##########  types  #######################
 

@@ -71,12 +71,12 @@ int gTimerIRQoccurred;
 double gFsampl;
 u16    dacval[4];
 s16    adcval[4];
-double g_x[4], g_y[4];
+double g_x[4], g_x_1[4],g_y[4];
 double g2pi, gPhase[4], gFreq[4];
 int gR5ctrlState;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
-unsigned long gTotSweepSamples[4], gCurSweepSamples[4];
+unsigned long gTotSweepSamples[4], gCurSweepSamples[4], curShmSampleNum;
 
 // table of execution times for profiling;
 // entries are <x>, <x^2>, min, max, N_entries
@@ -204,7 +204,12 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if(d==0)
         gR5ctrlState=R5CTRLR_IDLE;
       else
+        {
         gR5ctrlState=R5CTRLR_WAVEGEN;
+        // if the trigger mode is SWEEP, 
+        // force a trigger when the wave generator is started
+        gRecorderConfig.state=RECORDER_FORCE;
+        }
       break;
 
     // send current state
@@ -1035,8 +1040,10 @@ void InitVars(void)
   gRecorderConfig.mode=RECORDER_SLOPE;
   gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
   gRecorderConfig.level=0.;
+  curShmSampleNum=0;
   for(i=0; i<4; i++)
     {
+    g_x[i]=0.;
     g_y[i]=0.;
     gPhase[i]=0.;
     gFreq[i]=0.;
@@ -1122,12 +1129,75 @@ int main()
       AddTimeToTable(1,currtimer_us);
       #endif
 
-      // do something...
 
       // read ADCs into raw (adcval[i]) and with fullscale = 1.0 (g_x[i])
       ReadADCs(adcval);
       for(i=0; i<4; i++)
+        {
+        // x_(n-1)
+        g_x_1[i]=g_x[i];
+        // x_(n)
         g_x[i]=adcval[i]/ADAQ23876_FULLSCALE_CNT;
+        }
+
+
+      // shall we trigger the recorder?
+      switch(gRecorderConfig.state)
+        {
+        case RECORDER_FORCE:
+          gRecorderConfig.state=RECORDER_ACQUIRING;
+          curShmSampleNum=0;
+          break;
+
+        case RECORDER_ARMED:
+          if(gRecorderConfig.mode==RECORDER_SLOPE)
+            {
+            if(
+                ( 
+                  (gRecorderConfig.slopedir == RECORDER_SLOPE_RISING) &&
+                  (g_x[gRecorderConfig.trig_chan-1] >= gRecorderConfig.level) &&
+                  (g_x_1[gRecorderConfig.trig_chan-1] < gRecorderConfig.level)
+                ) ||
+                ( 
+                  (gRecorderConfig.slopedir == RECORDER_SLOPE_FALLING) &&
+                  (g_x[gRecorderConfig.trig_chan-1] <= gRecorderConfig.level) &&
+                  (g_x_1[gRecorderConfig.trig_chan-1] > gRecorderConfig.level)
+                )
+              )
+              {
+              // triggered
+              gRecorderConfig.state=RECORDER_ACQUIRING;
+              curShmSampleNum=0;
+              }
+            }
+          break;
+        // don't check for RECORDER_ACQUIRING state here, otherwise we miss first sample
+        }
+
+      // if recorder is triggered, store the new ADC samples into shm
+      if( gRecorderConfig.state == RECORDER_ACQUIRING )
+        {
+        if(curShmSampleNum < MAX_SHM_SAMPLES)
+          {
+          // there is still space in shm buffer: store the latest values and continue
+          for(i=0; i<4; i++)
+            metal_io_write16(sample_shmem_io, SAMPLE_SHM_HEADER_LEN+i*2+8*curShmSampleNum, adcval[i]);
+          
+          curShmSampleNum++;
+          }
+        // is the buffer full?
+        // note that this is not an "else" case of previous "if", because curShmSampleNum 
+        // was incremented in the same "if", so the buffer may be full now
+        if(curShmSampleNum >= MAX_SHM_SAMPLES)
+          {
+          // buffer is full: write the number of samples recorded and stop recording
+          gRecorderConfig.state = RECORDER_IDLE;
+          metal_io_write32(sample_shmem_io, 0, curShmSampleNum);
+          }
+        }
+
+
+      // do something: either signal generator or controller (or idle)
 
       switch(gR5ctrlState)
         {
