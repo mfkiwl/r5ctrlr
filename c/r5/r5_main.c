@@ -204,12 +204,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if(d==0)
         gR5ctrlState=R5CTRLR_IDLE;
       else
-        {
         gR5ctrlState=R5CTRLR_WAVEGEN;
-        // if the trigger mode is SWEEP, 
-        // force a trigger when the wave generator is started
-        gRecorderConfig.state=RECORDER_FORCE;
-        }
       break;
 
     // send current state
@@ -1228,7 +1223,22 @@ int main()
                     gPhase[i] -= g2pi;
                   break;
 
+
                 case WGEN_CH_TYPE_SWEEP:
+
+                  // if the recorder trigger mode is SWEEP and 
+                  // the trigger is armed and
+                  // this is the right trig channel and
+                  // this is the first sample of the sweep,
+                  // then force a trigger to start recording
+                  if( (gRecorderConfig.trig_chan == (i+1)          ) &&
+                      (gRecorderConfig.state     == RECORDER_ARMED ) &&
+                      (gRecorderConfig.mode      == RECORDER_SWEEP ) &&
+                      (gCurSweepSamples[i]       == 0              ) )
+                    {
+                    gRecorderConfig.state=RECORDER_FORCE;
+                    }
+
                   // output current phase
                   g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
                   // calculate next phase

@@ -1250,16 +1250,17 @@ void printHelp(int filedes)
   sendback(filedes,"                                in magnitude\n");
   sendback(filedes,"RECORD:TRIGger:SETUP <trig_ch> SWEEP\n");
   sendback(filedes,"                              : the recorder is configured to trigger as soon as the\n");
-  sendback(filedes,"                                waveform generator is started; <trig_ch> is actually ignored.\n");
-  sendback(filedes,"                                It is called 'SWEEP' mode because it can be used to draw\n");
-  sendback(filedes,"                                Bode diagrams when one of the waveform generator channels\n");
-  sendback(filedes,"                                is used to feed a sweep into a system under test\n");
+  sendback(filedes,"                                waveform generator starts a new sweep on channel <trig_ch>.\n");
+  sendback(filedes,"                                This mode can be used to draw Bode diagrams of a a system under test\n");
   sendback(filedes,"RECORD:SAMPLES?               : retrieve the recored samples; use after a successful trigger,\n");
   sendback(filedes,"                                when the RECORD:TRIGger? reports an IDLE state, signaling the end\n");
   sendback(filedes,"                                of an acquisition.\n");
   sendback(filedes,"                                The answer is a first line with the total number of samples,\n");
   sendback(filedes,"                                then one line per sample with all four ADC channels printed\n");
   sendback(filedes,"                                as decimal 16-bit signed integers; first value is first ADC channel\n");
+  sendback(filedes,"                                NOTE: when recording in SWEEP mode, remember that the DAC is updated\n");
+  sendback(filedes,"                                at next sampling clock cycle, so the first sample in the shm must always\n");
+  sendback(filedes,"                                be discarded; anyway, it's good to have, to check it's zero\n");
 
   }
 
