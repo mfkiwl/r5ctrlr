@@ -1,0 +1,31 @@
+#!/bin/bash
+set -x # echo on
+#$ cd /xilinxworks/ZCU102/v2024.2/r5ctrlr/r5ctrlr/hardware/r5ctrlr
+#$ xsct
+#xsct% sdtgen set_dt_param -dir output_dts -xsa design_1_wrapper.xsa -board_dts zcu102-rev1.0
+#xsct% sdtgen generate_sdt
+#xsct% exit
+#
+# petalinux-config --get-hw-description=./hardware/r5ctrlr/output_dts/
+# petalinux-config -c kernel
+# petalinux-config -c rootfs 
+# petalinux-build -x mrproper
+# petalinux-build
+# petalinux-package --boot --fpga design_1_wrapper.bit --u-boot --format BIN --force --add ./R5app.elf --cpu=r5-0 --bootgen-extra-args "-log debug"
+# petalinux-package --boot --fpga design_1_wrapper.bit --u-boot --format BIN --force --add ./R5app.elf --cpu=r5-0
+petalinux-package boot --fpga design_1_wrapper.bit --u-boot --format BIN --force --add ./R5app.elf --cpu=r5-0
+sudo rm -rf /media/valbas/boot/*
+cp images/linux/{BOOT.BIN,image.ub,boot.scr} /media/valbas/boot/
+sudo rm -rf /media/valbas/root/*
+sudo tar xvf images/linux/rootfs.tar.gz -C /media/valbas/root
+# sudo cp -r ./hardware/chopsync-v1p2/linux_code/userspace_web_interface/srv/* /media/valbas/root/srv/.
+# sudo chmod -R a+rx /media/valbas/root/srv/*
+ sudo cp -r ./99-petalinux /media/valbas/root/etc/sudoers.d/.
+ sudo chmod a+rx /media/valbas/root/etc/sudoers.d/99-petalinux
+# avoid systemd warning on SysV init script
+sudo rm /media/valbas/root/etc/init.d/r5ctrlr-scpi-serv-init
+sudo cp ./A53app.elf /media/valbas/root/home/maxiv/.
+sudo chmod a+rwx /media/valbas/root/home/maxiv/A53app.elf
+sync
+sync
+sync
