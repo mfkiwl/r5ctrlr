@@ -1,0 +1,7 @@
+#!/bin/bash
+set -x # echo on
+petalinux-build -x mrproper
+SECONDS=0
+petalinux-build
+duration=$SECONDS
+TZ=UTC0 printf 'Petalinux compile time was %(%H:%M:%S)T\n' "$duration"

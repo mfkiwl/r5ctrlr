@@ -1,0 +1,9 @@
+[Unit]
+Description=r5ctrlr-scpi-serv
+  
+[Service]
+ExecStart=/usr/bin/r5ctrlr-scpi-serv
+StandardOutput=journal+console
+  
+[Install]
+WantedBy=multi-user.target
