@@ -14,10 +14,13 @@
 #include <unistd.h>
 #include <openamp/open_amp.h>
 #include <metal/alloc.h>
+#include <metal/sys.h>
 #include "platform.h"
 #include "rproc.h"
 #include <string.h>
 #include "common.h"
+#include "sample_shmem.h"
+#include "SCPIserver.h"
 
 #define IPI_DEV_NAME        "ff340000.ipi"
 #define IPI_CHN_BITMASK     0x00000100
@@ -26,7 +29,18 @@
 #define RSC_MEM_PA          0x3ED48000UL
 #define RSC_MEM_SIZE        0x2000UL
 
+#define RPMSG_ANSWER_TIMEOUT_SEC (1.0)
+#define RPMSG_ANSWER_VALID     0
+#define RPMSG_ANSWER_ERR       1
+#define RPMSG_ANSWER_TIMEOUT   2
+
 // ##########  extern globals  ################
+extern void *gplatform;
+extern s16 g_adcval[4], g_dacval[4];
+extern u32 gFsampl;
+extern int gR5ctrlState;
+extern WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
+extern TRIG_CONFIG gRecorderConfig;
 
 
 // ##########  protos  ########################
@@ -39,6 +53,8 @@ static void rpmsg_name_service_bind_cb(struct rpmsg_device *rdev,
 int SetupSystem(void **platformp);
 int CleanupSystem(void *platform);
 static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index);
+int WaitForRpmsg(void);
+void FlushRpmsg(void);
 int main(int argc, char *argv[]);
 
 

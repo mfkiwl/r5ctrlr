@@ -42,6 +42,13 @@ axi {
                        interrupt-parent = <&gic>;
                        interrupts = <0 29 4>;
                        };
+
+    /* 128K of shared memory for ADC samples */
+    shm_sample0: shm@3ed80000 {
+                              compatible = "shm_uio";
+                              reg = <0x0 0x3ed80000 0x0 0x00020000>;
+                              };
+
     };
 
 };

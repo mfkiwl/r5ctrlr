@@ -1,6 +1,6 @@
 OBJ_LOCAL = r5_main.o max7301.o ad3552.o adaq23876.o
 COMMON_DIR = ../common
-OBJ_COMMON = platform.o rproc.o rsc_table.o
+OBJ_COMMON = platform.o rproc.o rsc_table.o sample_shmem.o
 TARGET = R5app.elf
 PLATFORM_PATH = /xilinxworks/ZCU102/v2024.2/r5ctrlr/r5ctrlr/hardware/vitis-workspace/ZCU102-r5ctrlr
 

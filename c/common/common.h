@@ -21,23 +21,97 @@
 #define LPRINTF(format, ...) xil_printf(format, ##__VA_ARGS__)
 #else
 // ########### linux side
+#define XST_SUCCESS                     0L
+#define XST_FAILURE                     1L
+
+typedef __uint32_t u32;
+typedef    int16_t s16;
+
 #define LPRINTF(format, ...) printf(format, ##__VA_ARGS__)
 #endif
 
 #define LPERROR(format, ...) LPRINTF("ERROR: " format, ##__VA_ARGS__)
+#define SIGN(x) (x<0?'-':'+')
 #define DECIMALS(x,n) (int)(fabs(x-(int)(x))*pow(10,n)+0.5)
 
 //---------- openamp stuff -------------------------
 #define RPMSG_SERVICE_NAME         "rpmsg-uopenamp-loop-params"
 
+// frequency of the timer interrupt:
+#define DEFAULT_TIMER_FREQ_HZ       10.e3
+
+// commands from linux to R5
+#define RPMSGCMD_NOP                 0
+#define RPMSGCMD_WRITE_DAC           1
+#define RPMSGCMD_READ_DAC            2
+#define RPMSGCMD_WRITE_DACCH         3
+#define RPMSGCMD_READ_ADC            4
+#define RPMSGCMD_WRITE_FSAMPL        5
+#define RPMSGCMD_READ_FSAMPL         6
+#define RPMSGCMD_WGEN_ONOFF          7
+#define RPMSGCMD_READ_STATE          8
+#define RPMSGCMD_WRITE_WGEN_CH_CONF  9
+#define RPMSGCMD_READ_WGEN_CH_CONF  10
+#define RPMSGCMD_WRITE_WGEN_CH_EN   11
+#define RPMSGCMD_READ_WGEN_CH_EN    12
+#define RPMSGCMD_RESET              13
+#define RPMSGCMD_WRITE_TRIG         14
+#define RPMSGCMD_READ_TRIG          15
+#define RPMSGCMD_WRITE_TRIG_CFG     16
+#define RPMSGCMD_READ_TRIG_CFG      17
+
+// R5 application state
+#define R5CTRLR_IDLE     0
+#define R5CTRLR_WAVEGEN  1
+
+// recorder state
+#define RECORDER_IDLE          0
+#define RECORDER_FORCE         1
+#define RECORDER_ARMED         2
+#define RECORDER_ACQUIRING     3
+// recorder mode
+#define RECORDER_SWEEP         0
+#define RECORDER_SLOPE         1
+// recorder slope type
+#define RECORDER_SLOPE_RISING  0
+#define RECORDER_SLOPE_FALLING 1
+
+// wave generator channel config
+#define WGEN_CH_ENABLE_OFF       0
+#define WGEN_CH_ENABLE_ON        1
+#define WGEN_CH_ENABLE_SINGLE    2
+#define WGEN_CH_TYPE_DC          0
+#define WGEN_CH_TYPE_SINE        1
+#define WGEN_CH_TYPE_SWEEP       2
+
 
 // ##########  types  #######################
+
 typedef struct
   {
-  float freqHz;
-  int   percentAmplitude;
-  float constValVolt;
-  } LOOP_PARAM_MSG_TYPE;
+  int    enable;   // OFF/ON/SINGLE
+  int    type;     // DC/SINE/SWEEP
+  float  ampl, offs, f1, f2, dt;
+  } WAVEGEN_CH_CONFIG;
+
+typedef struct
+  {
+  int    state;     // IDLE/FORCE/ARMED/ACQUIRING
+  int    mode;      // SWEEP/SLOPE
+  int    trig_chan; // in range [1,4]
+  int    slopedir;  // RISING/FALLING
+  float  level;
+  } TRIG_CONFIG;
+
+typedef struct rpmsg_endpoint RPMSG_ENDP_TYPE;
+
+typedef struct
+  {
+  u32 command;
+  u32 option;
+  u32 data[122];
+  } R5_RPMSG_TYPE;
+
 
 
 #endif
