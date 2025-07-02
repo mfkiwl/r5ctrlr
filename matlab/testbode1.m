@@ -26,6 +26,11 @@ ADCmax=32768;
 
 samples=readmatrix(fname,'NumHeaderLines',1);
 [Ns Nch]=size(samples);
+% if the number of samples is odd, discard the last one
+if rem(Ns,2)~= 0
+  samples=samples(1:end-1,:);
+  Ns=Ns-1;
+end
 
 T=1/Fs;
 df=Fs/Ns;
