@@ -1,12 +1,18 @@
 #!/usr/bin/python
 
 import socket
+import select
 import os
 import urllib.parse
 import time
+import numpy as np
+import matplotlib.pyplot as plt
+import io
+import base64
 
 # max samples per channel in shared memory
 MAXSAMPLES=16383
+MAXCNTS=32768.
 
 # defaults
 sweep_ch=4
@@ -16,6 +22,9 @@ fstart=100
 fstop=4000
 acquirenow=False
 
+# Ensure this works even if DISPLAY is not set (e.g., on servers)
+import matplotlib
+matplotlib.use('Agg')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,7 +36,7 @@ s.connect(("192.168.0.18", 8888))
 # It is passed to cgi scripts as the environment
 # variable QUERY_STRING
 query_string = os.environ['QUERY_STRING']
-#query_string = ''
+#query_string = 'startacq=1'
 # convert the query string to a dictionary
 arguments = urllib.parse.parse_qs(query_string)
 
@@ -43,7 +52,7 @@ for name in arguments.keys():
     ans=(s.recv(1024)).decode('utf-8')
     tok=ans.split(" ",2)
     if tok[0].strip()=='ERR:':
-      print('Error commanding the new sampling frequency')
+      print('<br>Error commanding the new sampling frequency<br>')
       # print(f'new commanded sampling freq is {v_fsampl} Hz')
 
   # -------- new DAC sweep channel
@@ -99,7 +108,7 @@ print('<html>')
 print('<head>')
 print('  <table>')
 print('    <tr>')
-print('      <td> <a href="r5bode1.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
+print('      <td> <a href="?"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
 print('      <H2>Bode Facility</H2>')
@@ -165,15 +174,184 @@ print('    </tr>')
 
 print('  </table>')
 
-print(f'  <br>Acquisition time in this configuration is {acqtime} sec<br><br>')
+print(f'  <br>Acquisition time in this configuration is {acqtime:.3f} sec<br><br>')
 
 print('  <button type="submit" name="startacq" id="startacq" value=1> Acquire </button>')
 
 print('</form>')
 
+# ------------------  acquire a new Bode  --------------------------
 if acquirenow:
-  print('  <br> >>> Acquiring <<< <br><br>')
+  print('  <br> configuring...')
+
+  cmd_s='WAVEGEN:CH_ENABLE '+str(sweep_ch)+' OFF\n'
+  s.sendall(cmd_s.encode('ascii')) 
+  ans=(s.recv(1024)).decode('utf-8')
+  tok=ans.split(" ",2)
+  if tok[0].strip()=='ERR:':
+    print('<br>Error programming the waveform generator (step 1)<br>')
+
+  # by default sweep is done at 80% full scale, no offset
+  cmd_s='WAVEGEN:CH_CONFIG '+str(sweep_ch)+' SWEEP 0.8 0 '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
+  # print('<br>'+cmd_s+'<br>')
+  s.sendall(cmd_s.encode('ascii')) 
+  ans=(s.recv(1024)).decode('utf-8')
+  tok=ans.split(" ",2)
+  if tok[0].strip()=='ERR:':
+    print('<br>Error programming the waveform generator (step 2)<br>')
+
+  cmd_s='RECORD:TRIG:SETUP '+str(sweep_ch)+' SWEEP\n'
+  s.sendall(cmd_s.encode('ascii')) 
+  ans=(s.recv(1024)).decode('utf-8')
+  tok=ans.split(" ",2)
+  if tok[0].strip()=='ERR:':
+    print('<br>Error programming the waveform generator (step 3)<br>')
+
+  cmd_s='WAVEGEN ON\n'
+  s.sendall(cmd_s.encode('ascii')) 
+  ans=(s.recv(1024)).decode('utf-8')
+  tok=ans.split(" ",2)
+  if tok[0].strip()=='ERR:':
+    print('Error programming the waveform generator (step 4)<br>')
+
+  cmd_s='RECORD:TRIG ARM\n'
+  s.sendall(cmd_s.encode('ascii')) 
+  ans=(s.recv(1024)).decode('utf-8')
+  tok=ans.split(" ",2)
+  if tok[0].strip()=='ERR:':
+    print('<br>Error programming the waveform generator (step 5)<br>')
+
+  cmd_s='WAVEGEN:CH_ENABLE '+str(sweep_ch)+' SINGLE\n'
+  s.sendall(cmd_s.encode('ascii')) 
+  ans=(s.recv(1024)).decode('utf-8')
+  tok=ans.split(" ",2)
+  if tok[0].strip()=='ERR:':
+    print('<br>Error programming the waveform generator (step 6)<br>')
+
+  print('  acquiring...')
   
+  ans=''
+  while ans != 'IDLE' :
+    cmd_s='RECORD:TRIG?\n'
+    # print('<br>'+cmd_s+'<br>')
+    s.sendall(cmd_s.encode('ascii')) 
+    ans=(s.recv(1024)).decode('utf-8')
+    tok=ans.split(" ",2)
+    if tok[0].strip()=='ERR:':
+      print('<br>'+ans+'<br>')
+      break
+    ans=tok[1].strip()
+  
+  print(' triggered<br>')
+  
+  # -------------  read samples  ------------------
+  cmd_s='RECORD:SAMPLES?\n'
+  s.sendall(cmd_s.encode('ascii'))
+  # now receive a big answer 
+  samplebuf=""
+  while True:
+    s.setblocking(0)
+    # set timeout to twice the acquisition time
+    timeout_in_seconds=2*acqtime
+    ready = select.select([s], [], [], timeout_in_seconds)
+    if ready[0]:
+      ans=s.recv(1024)
+      samplebuf += ans.decode('utf-8')
+    else:
+      break
+
+  buflines=samplebuf.splitlines()
+  
+  # while '\n' in samplebuf:
+  #   line, samplebuf = samplebuf.split('\n', 1)
+  #   print(f"Received line: {line}<br>")
+  
+  # first line is a header which we ignore
+  if len(buflines) > 1:
+    samples = [list(map(int, line.split())) for line in buflines[1:]]
+
+  #print("2D Integer Array:<br>")
+  #for row in samples:
+  #  print(row)
+  #  print('<br>')
+
+  # if we have an odd number of samples, discard the first (which should be zero)
+  if len(samples)%2 == 1 :
+    samples=samples[1:]
+  samplenum=len(samples)
+  print(f'acquired {samplenum} samples<br>')
+  
+  # ------------- calculate something --------------
+  Ts=1./fsampl
+  timev=np.arange(samplenum)*Ts
+  inv =np.array([sublist[ in_ch-1] for sublist in samples])/MAXCNTS
+  outv=np.array([sublist[out_ch-1] for sublist in samples])/MAXCNTS
+  df=fsampl/samplenum;
+  freqv=np.arange(0,fsampl/2,df)
+  fin =np.fft.fft( inv)
+  fout=np.fft.fft(outv)
+  h=np.divide(fout,fin)
+  mag=20*np.log10(np.absolute(h))
+  mag2=mag[:int(samplenum/2)]
+  pha=np.angle(h,deg=True)
+  pha2=pha[:int(samplenum/2)]
+  
+  #print(f'freqv {np.size(freqv)}<br>')
+  #print(f'mag2 {np.size(mag2)}<br>')
+
+  # -------------  plot  ------------------
+  
+  # #------ output samples in time
+  # plt.figure(figsize=(6, 4))
+  # plt.plot(timev, outv, linestyle='-', color='blue')
+  # plt.title('system output in time')
+  # plt.xlabel('time')
+  # plt.ylabel('normalized output')
+  # plt.grid(True)
+  
+  #------  Bode mag  ---------------
+  plt.figure(figsize=(6, 4))
+  plt.semilogx(freqv, mag2, linestyle='-', color='blue')
+  plt.title('Bode magnitude')
+  plt.xlabel('Hz')
+  plt.ylabel('dB')
+  plt.grid(True)
+  plt.xlim([fstart,fstop])
+
+  # Save plot to in-memory buffer
+  imgbuf = io.BytesIO()
+  plt.savefig(imgbuf, format='png')
+  plt.close()
+  imgbuf.seek(0)
+  
+  # Encode image to base64
+  img_base64 = base64.b64encode(imgbuf.read()).decode('utf-8')
+  
+  # embed picture into html
+  print(f'  <img src="data:image/png;base64,{img_base64}" alt="Bode mag">')
+  
+  #------  Bode phase  ---------------
+  plt.figure(figsize=(6, 4))
+  plt.semilogx(freqv, pha2, linestyle='-', color='blue')
+  plt.title('Bode phase')
+  plt.xlabel('Hz')
+  plt.ylabel('deg')
+  plt.grid(True)
+  plt.xlim([fstart,fstop])
+
+  # Save plot to in-memory buffer
+  imgbuf = io.BytesIO()
+  plt.savefig(imgbuf, format='png')
+  plt.close()
+  imgbuf.seek(0)
+  
+  # Encode image to base64
+  img_base64 = base64.b64encode(imgbuf.read()).decode('utf-8')
+  
+  # embed picture into html
+  print(f'  <img src="data:image/png;base64,{img_base64}" alt="Bode mag">')
+  
+print('<br><br>')
 print('</body>')
 print('</html>')
 
