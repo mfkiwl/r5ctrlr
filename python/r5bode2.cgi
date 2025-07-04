@@ -270,7 +270,7 @@ elif acq_state==ACQ_START :
 
   print('  <br>')
   print(datetime.now())
-  print(' : acquiring... ')
+  print(f' : acquiring {acqtime:.3f} sec of data...')
   # here page will reload
     
 elif acq_state==ACQ_WAIT_COMPLETION:
@@ -300,8 +300,9 @@ elif acq_state==ACQ_DOWNLOAD:
   samplebuf=""
   while True:
     s.setblocking(0)
-    # set timeout to twice the acquisition time
-    timeout_in_seconds=2*acqtime
+    ## set timeout to twice the acquisition time
+    #timeout_in_seconds=2*acqtime
+    timeout_in_seconds=1
     ready = select.select([s], [], [], timeout_in_seconds)
     if ready[0]:
       ans=s.recv(1024)
@@ -309,9 +310,9 @@ elif acq_state==ACQ_DOWNLOAD:
     else:
       break
 
-  print('  <br>')
-  print(datetime.now())
-  print(' : acquired ')
+  # print('  <br>')
+  # print(datetime.now())
+  # print(' : acquired ')
 
   buflines=samplebuf.splitlines()
   
@@ -332,7 +333,8 @@ elif acq_state==ACQ_DOWNLOAD:
   if len(samples)%2 == 1 :
     samples=samples[1:]
   samplenum=len(samples)
-  print(f'{samplenum} samples<br>')
+  
+  # print(f'{samplenum} samples<br>')
   
   # ------------- calculate something --------------
   Ts=1./fsampl
