@@ -197,15 +197,15 @@ static void rpmsg_service_unbind(struct rpmsg_endpoint *ept)
   {
   (void)ept;
   rpmsg_destroy_ept(&endp);
-  LPRINTF("rpmsg service is destroyed\n");
+  LPRINTF("rpmsg service is destroyed\n\r");
   ept_deleted = 1;
   }
 
 static void rpmsg_name_service_bind_cb(struct rpmsg_device *rdev, const char *name, uint32_t dest)
   {
-  LPRINTF("new endpoint notification is received.\n");
+  LPRINTF("new endpoint notification is received.\n\r");
   if (strcmp(name, RPMSG_SERVICE_NAME))
-    LPERROR("Unexpected name service %s.\n", name);
+    LPERROR("Unexpected name service %s.\n\r", name);
   else
     (void)rpmsg_create_ept(&endp, rdev, 
                            RPMSG_SERVICE_NAME, RPMSG_ADDR_ANY, dest, 
@@ -228,26 +228,26 @@ static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index)
   // init remoteproc instance
   if(!remoteproc_init(&rproc_inst, &rproc_ops, &rproc_priv))
     return NULL;
-  LPRINTF("Remoteproc successfully initialized\n");
+  LPRINTF("Remoteproc successfully initialized\n\r");
   // mmap resource table
   pa = RSC_MEM_PA;
-  LPRINTF("Calling mmap resource table.\n");
+  LPRINTF("Calling mmap resource table.\n\r");
   rsc_table = remoteproc_mmap(&rproc_inst, &pa, NULL, rsc_size, 0, NULL);
   if(!rsc_table)
     {
-    LPRINTF("ERROR: Failed to mmap resource table.\n");
+    LPRINTF("ERROR: Failed to mmap resource table.\n\r");
     return NULL;
     }
-  LPRINTF("Resource table successfully mmaped\n");
+  LPRINTF("Resource table successfully mmaped\n\r");
   // parse resource table to remoteproc
   status = remoteproc_set_rsc_table(&rproc_inst, rsc_table, rsc_size);
   if(status!=0) 
     {
-    LPRINTF("Failed to initialize remoteproc\n");
+    LPRINTF("Failed to initialize remoteproc\n\r");
     remoteproc_remove(&rproc_inst);
     return NULL;
     }
-  LPRINTF("Successfully set resource table to remoteproc\n");
+  LPRINTF("Successfully set resource table to remoteproc\n\r");
 
   return &rproc_inst;
   }
@@ -280,11 +280,11 @@ int SetupSystem(void **platformp)
   rpdev = create_rpmsg_vdev(rproc, 0, VIRTIO_DEV_DRIVER, NULL, rpmsg_name_service_bind_cb);
   if(!rpdev)
     {
-    LPERROR("Failed to create rpmsg virtio device.\n");
+    LPERROR("Failed to create rpmsg virtio device.\n\r");
     return -1;
     }
   
-  LPRINTF("Allocating msg buffer\n");
+  LPRINTF("Allocating msg buffer\n\r");
   max_size = rpmsg_virtio_get_buffer_size(rpdev);
   if(max_size < sizeof(R5_RPMSG_TYPE))
     {
@@ -296,24 +296,24 @@ int SetupSystem(void **platformp)
 
   if(!gMsgPtr)
     {
-    LPERROR("msg buffer allocation failed.\n");
+    LPERROR("msg buffer allocation failed.\n\r");
     return -1;
     }
 
-  LPRINTF("Try to create rpmsg endpoint.\n");
+  LPRINTF("Try to create rpmsg endpoint.\n\r");
   status = rpmsg_create_ept(&endp, rpdev, RPMSG_SERVICE_NAME,
                             RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
                             rpmsg_endpoint_cb,
                             rpmsg_service_unbind);
   if(status)
     {
-    LPERROR("Failed to create endpoint.\n");
+    LPERROR("Failed to create endpoint.\n\r");
     metal_free_memory(gMsgPtr);
     return -1;
     }
-  LPRINTF("Successfully created rpmsg endpoint.\n");
+  LPRINTF("Successfully created rpmsg endpoint.\n\r");
 
-  LPRINTF("Waiting for remote answer...\n");
+  LPRINTF("Waiting for remote answer...\n\r");
 	while(!is_rpmsg_ept_ready(&endp))
 		platform_poll(*platformp);
 
@@ -483,12 +483,12 @@ int main(int argc, char *argv[])
   //   }
   
   // cleanup and exit
-  LPRINTF("\nExiting\n");
+  LPRINTF("\n\rExiting\n\r");
 
   status = CleanupSystem(gplatform);
   if(status!=0)
     {
-    LPRINTF("ERROR Cleaning up System\n");
+    LPRINTF("ERROR Cleaning up System\n\r");
     // continue anyway, as we are shutting down
     //return status;
     }

@@ -633,11 +633,12 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       return;
       }
     x=strtof(p, NULL);
-    if(errno!=0 && errno!=EIO && x==0.0F)
-      {
-      snprintf(ans, maxlen, "%s: invalid amplitude\n", SCPI_ERRS);
-      return;
-      }
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid amplitude\n", SCPI_ERRS);
+    //   return;
+    //   }
     // write floating point values directly as float (32 bit)
     memcpy(&(rpmsg_ptr->data[2]), &x, sizeof(u32));
 
@@ -653,12 +654,12 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         }
       x=strtof(p, NULL);
       // 0.0 is an acceptable value for the offset;
-      // but in that case strtof returns EIO to signal the underflow
-      if(errno!=0 && errno!=EIO && x==0.0F)
-        {
-        snprintf(ans, maxlen, "%s: invalid offset (%g; errno=%d)\n", SCPI_ERRS,x,errno);
-        return;
-        }
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid offset (%g; errno=%d)\n", SCPI_ERRS,x,errno);
+      //   return;
+      //   }
       }
     else
       x=0.0F;
@@ -678,11 +679,12 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && errno!=EIO && x==0.0F)
-        {
-        snprintf(ans, maxlen, "%s: invalid frequency\n", SCPI_ERRS);
-        return;
-        }
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid frequency\n", SCPI_ERRS);
+      //   return;
+      //   }
       }
     else
       x=0.0F;
@@ -701,11 +703,12 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && errno!=EIO && x==0.0F)
-        {
-        snprintf(ans, maxlen, "%s: invalid end frequency\n", SCPI_ERRS);
-        return;
-        }
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid end frequency\n", SCPI_ERRS);
+      //   return;
+      //   }
       }
     else
       x=0.0F;
@@ -724,11 +727,12 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         return;
         }
       x=strtof(p, NULL);
-      if(errno!=0 && errno!=EIO && x==0.0F)
-        {
-        snprintf(ans, maxlen, "%s: invalid sweep time\n", SCPI_ERRS);
-        return;
-        }
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid sweep time\n", SCPI_ERRS);
+      //   return;
+      //   }
       }
     else
       x=1.0F;  // to prevent divisions by 0 :-)
