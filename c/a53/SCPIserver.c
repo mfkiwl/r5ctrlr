@@ -1203,7 +1203,7 @@ void printHelp(int filedes)
   sendback(filedes,"Send CTRL-C (CTRL-D on windows) to close the connection\n\n");
   sendback(filedes,"Command list:\n\n");
   sendback(filedes,"*IDN?                         : print firmware name and version\n");
-  sendback(filedes,"*STB?                         : retrieve current state\n");
+  sendback(filedes,"*STB?                         : retrieve current state; answer is {IDLE|WAVEGEN}\n");
   sendback(filedes,"*RST                          : reset controller\n");
   sendback(filedes,"DAC <ch1> <ch2> <ch3> <ch4>   : write value of all 4 DAC channels;\n");
   sendback(filedes,"                                the values are 16-bit 2's complement integers\n");

@@ -18,10 +18,13 @@ sudo rm -rf /media/valbas/boot/*
 cp images/linux/{BOOT.BIN,image.ub,boot.scr} /media/valbas/boot/
 sudo rm -rf /media/valbas/root/*
 sudo tar xvf images/linux/rootfs.tar.gz -C /media/valbas/root
-# sudo cp -r ./hardware/chopsync-v1p2/linux_code/userspace_web_interface/srv/* /media/valbas/root/srv/.
-# sudo chmod -R a+rx /media/valbas/root/srv/*
- sudo cp -r ./99-petalinux /media/valbas/root/etc/sudoers.d/.
- sudo chmod a+rx /media/valbas/root/etc/sudoers.d/99-petalinux
+# html server stuff
+sudo cp -r ./hardware/gitcode/r5ctrlr/linux_web_interface/* /media/valbas/root/.
+sudo chmod -R a+rx /media/valbas/root/usr/libexec/apache2/modules/cgi-bin/*.cgi
+sudo chmod -R a+rx /media/valbas/root/usr/share/apache2/default-site/htdocs/*
+#
+sudo cp -r ./99-petalinux /media/valbas/root/etc/sudoers.d/.
+sudo chmod a+rx /media/valbas/root/etc/sudoers.d/99-petalinux
 # avoid systemd warning on SysV init script
 sudo rm /media/valbas/root/etc/init.d/r5ctrlr-scpi-serv-init
 sudo cp ./A53app.elf /media/valbas/root/home/maxiv/.

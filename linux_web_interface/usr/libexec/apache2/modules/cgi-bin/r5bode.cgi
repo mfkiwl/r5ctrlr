@@ -37,8 +37,8 @@ matplotlib.use('Agg')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#s.connect(("127.0.0.1", 8888))
-s.connect(("192.168.0.18", 8888))
+s.connect(("127.0.0.1", 8888))
+#s.connect(("192.168.0.18", 8888))
 
 
 # ---------  get the query string of the GET form  ------------
@@ -116,6 +116,28 @@ print('Content-type:text/html\r\n\r\n')
 print('<!DOCTYPE html>')
 print('<html>')
 print('<head>')
+
+# --- reload script for the state machine
+
+if ((acq_state!=ACQ_IDLE) and (acq_state!=ACQ_DOWNLOAD)) :
+  print('<script>')
+  print('    window.addEventListener("load", () => {')
+  print('      const url = new URL(window.location.href);')
+  print('      const params = url.searchParams;')
+  print('')
+  
+  if acq_state==ACQ_START:
+    print(f'        params.set("acqstate", "{ACQ_WAIT_COMPLETION}");')
+  elif acq_state==ACQ_WAIT_COMPLETION:
+    print(f'        params.set("acqstate", "{ACQ_DOWNLOAD}");')
+    
+  print('        url.search = params.toString();')
+  print('        window.location.replace(url.toString());')
+  print('    });')
+  print('  </script>')
+
+# --- end of reload script
+
 print('  <table>')
 print('    <tr>')
 print('      <td> <a href="?"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
@@ -195,7 +217,9 @@ print('</form>')
 # ----- it's a state machine to allow page reload during acquisition
 # ----- and data downloading, to give some feedback to the user
 
-if acq_state==ACQ_START :
+if acq_state==ACQ_IDLE :
+  pass
+elif acq_state==ACQ_START :
   # print('  <br>')
   # print(datetime.now())
   # print(' : configuring...')
@@ -246,8 +270,10 @@ if acq_state==ACQ_START :
 
   print('  <br>')
   print(datetime.now())
-  print(' : acquiring... ')
-  
+  print(f' : acquiring {acqtime:.3f} sec of data...')
+  # here page will reload with new acq_state
+    
+elif acq_state==ACQ_WAIT_COMPLETION:
   ans=''
   while ans != 'IDLE' :
     cmd_s='RECORD:TRIG?\n'
@@ -264,7 +290,9 @@ if acq_state==ACQ_START :
   print('  <br>')
   print(datetime.now())
   print(' : triggered; downloading samples')
-  
+  # here page will reload with new acq_state
+    
+elif acq_state==ACQ_DOWNLOAD:
   # -------------  read samples  ------------------
   cmd_s='RECORD:SAMPLES?\n'
   s.sendall(cmd_s.encode('ascii'))
@@ -272,8 +300,9 @@ if acq_state==ACQ_START :
   samplebuf=""
   while True:
     s.setblocking(0)
-    # set timeout to twice the acquisition time
-    timeout_in_seconds=2*acqtime
+    ## set timeout to twice the acquisition time
+    #timeout_in_seconds=2*acqtime
+    timeout_in_seconds=1
     ready = select.select([s], [], [], timeout_in_seconds)
     if ready[0]:
       ans=s.recv(1024)
@@ -281,9 +310,9 @@ if acq_state==ACQ_START :
     else:
       break
 
-  print('  <br>')
-  print(datetime.now())
-  print(' : acquired ')
+  # print('  <br>')
+  # print(datetime.now())
+  # print(' : acquired ')
 
   buflines=samplebuf.splitlines()
   
@@ -304,7 +333,8 @@ if acq_state==ACQ_START :
   if len(samples)%2 == 1 :
     samples=samples[1:]
   samplenum=len(samples)
-  print(f'{samplenum} samples<br>')
+  
+  # print(f'{samplenum} samples<br>')
   
   # ------------- calculate something --------------
   Ts=1./fsampl
@@ -313,6 +343,8 @@ if acq_state==ACQ_START :
   outv=np.array([sublist[out_ch-1] for sublist in samples])/MAXCNTS
   df=(fsampl*1.0)/samplenum;
   freqv=np.arange(0,int(samplenum/2))*df
+  # fin =np.fft.fft( inv*np.hanning(len(inv)))
+  # fout=np.fft.fft(outv*np.hanning(len(outv)))
   fin =np.fft.fft( inv)
   fout=np.fft.fft(outv)
   h=np.divide(fout,fin)
@@ -320,6 +352,7 @@ if acq_state==ACQ_START :
   mag2=mag[:int(samplenum/2)]
   pha=np.angle(h,deg=True)
   pha2=pha[:int(samplenum/2)]
+  #pha2=np.unwrap(pha2,period=360)
   
   # print(f'freqv size: {np.size(freqv)}<br>')
   # print(f'mag2 size: {np.size(mag2)}<br>')
@@ -408,8 +441,34 @@ if acq_state==ACQ_START :
   # embed picture into html
   print(f'  <img src="data:image/png;base64,{img_base64}" alt="Bode mag">')
 
-
-
+  # ----------  embed raw data for download  ------------
+  print('<br>')
+  print('Raw data linked <a href="data:text/plain;charset=US-ASCII,')
+  
+  s='Nsamples '+str(samplenum)+'%0A'
+  s.encode("ascii")
+  print(s)
+  s='Fsampling '+str(int(fsampl))+'%0A'
+  s.encode("ascii")
+  print(s)
+  s='Fstart '+str(fstart)+'%0A'
+  s.encode("ascii")
+  print(s)
+  s='Fstop '+str(fstop)+'%0A'
+  s.encode("ascii")
+  print(s)
+  
+  s=' Sys_input Sys_output%0A'
+  s.encode("ascii")
+  print(s)
+  for row in samples:
+    #s=str(row[in_ch-1])+' '+str(row[out_ch-1])+'%0A'
+    s=f'{row[in_ch-1]:10} {row[out_ch-1]:10}%0A'
+    s.encode("ascii")
+    print(s)
+  
+  print('">here</a> if you want to download it.')
+  
   
 print('<br><br>')
 print('</body>')
