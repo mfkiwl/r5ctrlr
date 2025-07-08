@@ -153,6 +153,9 @@ print('<body>')
 
 print('<form action="" method="GET" >')
 
+# -- Prevent implicit submission of the form hitting <enter> key
+print('  <button type="submit" disabled style="display: none" aria-hidden="true"></button>')
+
 print('  <table>')
 
 #-------  Fsampl  -----------------------------
@@ -289,7 +292,7 @@ elif acq_state==ACQ_WAIT_COMPLETION:
   
   print('  <br>')
   print(datetime.now())
-  print(' : triggered; downloading samples')
+  print(' : downloading samples')
   # here page will reload with new acq_state
     
 elif acq_state==ACQ_DOWNLOAD:

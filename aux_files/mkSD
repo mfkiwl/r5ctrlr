@@ -8,7 +8,7 @@ set -x # echo on
 #
 # petalinux-config --get-hw-description=./hardware/r5ctrlr/output_dts/
 # petalinux-config -c kernel
-# petalinux-config -c rootfs 
+# petalinux-config -c rootfs
 # petalinux-build -x mrproper
 # petalinux-build
 # petalinux-package --boot --fpga design_1_wrapper.bit --u-boot --format BIN --force --add ./R5app.elf --cpu=r5-0 --bootgen-extra-args "-log debug"
@@ -19,9 +19,14 @@ cp images/linux/{BOOT.BIN,image.ub,boot.scr} /media/valbas/boot/
 sudo rm -rf /media/valbas/root/*
 sudo tar xvf images/linux/rootfs.tar.gz -C /media/valbas/root
 # html server stuff
+# busybox-httpd stuff:
+# sudo cp -r ./hardware/gitcode/r5ctrlr/linux_web_interface/srv/* /media/valbas/root/srv/.
+# sudo chmod -R a+rx /media/valbas/root/srv/*
+# apache stuff
 sudo cp -r ./hardware/gitcode/r5ctrlr/linux_web_interface/* /media/valbas/root/.
 sudo chmod -R a+rx /media/valbas/root/usr/libexec/apache2/modules/cgi-bin/*.cgi
 sudo chmod -R a+rx /media/valbas/root/usr/share/apache2/default-site/htdocs/*
+
 #
 sudo cp -r ./99-petalinux /media/valbas/root/etc/sudoers.d/.
 sudo chmod a+rx /media/valbas/root/etc/sudoers.d/99-petalinux
