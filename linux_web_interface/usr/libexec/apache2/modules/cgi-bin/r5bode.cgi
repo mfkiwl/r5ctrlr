@@ -162,7 +162,7 @@ print('  <table>')
 print('    <tr>')
 print('      <td>Sampling Frequency:</td>')
 print('      <td>')
-print(f'          <input type="number" name="fsampl" id="fsampl" value={tok[1]} min="1" max="10000" step=1 onchange="javascript:this.form.submit()"> Hz')
+print(f'          <input type="number" name="fsampl" id="fsampl" value={fsampl} min="1" max="10000" step=1 onchange="javascript:this.form.submit()"> Hz')
 print('      </td>')
 print('    </tr>')
 
