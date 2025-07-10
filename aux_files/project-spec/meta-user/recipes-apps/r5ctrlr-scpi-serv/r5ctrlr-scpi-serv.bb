@@ -28,6 +28,7 @@ SYSTEMD_PACKAGES = "${PN}"
 SYSTEMD_SERVICE:${PN} = "r5ctrlr-scpi-serv.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 RDEPENDS:${PN}:append = "libmetal open-amp"
+#INSANE_SKIP:${PN}:append = "arch"
 
 do_install() {
 	        if ${@bb.utils.contains('DISTRO_FEATURES', 'sysvinit', 'true', 'false', d)}; then

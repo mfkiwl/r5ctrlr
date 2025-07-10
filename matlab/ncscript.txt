@@ -1,0 +1,9 @@
+nc 192.168.0.18 8888 | tee cicci.txt
+wavegen on
+wavegen:ch_config 4 sweep 0.8 0 100 3000 1.6
+wavegen:ch_enable 4 off
+record:trig:setup 4 sweep
+record:trig arm
+wavegen:ch_enable 4 single
+record:trig?
+record:samples?

@@ -13,7 +13,7 @@
 #include "r5_main.h"
 
 //#define PROFILE
-#define PRINTOUT
+//#define PRINTOUT
 
 // ##########  globals  #######################
 
