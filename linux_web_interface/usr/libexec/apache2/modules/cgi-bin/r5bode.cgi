@@ -105,8 +105,8 @@ ans=(s.recv(1024)).decode("utf-8")
 tok=ans.split(" ",2)
 if(tok[0].strip()=="OK:"):
   fsampl=float(tok[1])
-#else:
-#  fsampl='&ltERR&gt'
+else:
+  fsampl=10000.0
 
 acqtime=MAXSAMPLES/fsampl
 
@@ -140,7 +140,7 @@ if ((acq_state!=ACQ_IDLE) and (acq_state!=ACQ_DOWNLOAD)) :
 
 print('  <table>')
 print('    <tr>')
-print('      <td> <a href="?"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
+print('      <td> <a href="/index.html"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
 print('      <H2>Bode Facility</H2>')
