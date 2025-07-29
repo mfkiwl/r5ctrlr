@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <math.h>
+#include <stdbool.h>
 #include <openamp/open_amp.h>
 #include <metal/alloc.h>
 #include "common.h"
