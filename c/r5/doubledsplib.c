@@ -65,14 +65,22 @@ double MISO(double *x, double *a, double *b, int dim)
 
 double PID(double command, double meas, PID_GAINS *coeff)
   {
-  double x, yp, yi, yd, y, ysat;
+  double x, xd, yp, yi, yd, y, ysat, G2Dcorr;
 
   // error node
   x=command-meas;
 
   // input dead band
   if(fabs(x) <= coeff->in_thr)
+    {
     x=0.;
+    // when in dead band, leave the filter decay only in the derivative term (i.e. put G2d=0)
+    G2Dcorr=0.;
+    }
+  else
+    {
+    G2Dcorr=coeff->G2d;
+    }
 
   // prop
   yp = x*coeff->Gp;
@@ -83,9 +91,9 @@ double PID(double command, double meas, PID_GAINS *coeff)
   // deriv
   // remember to use -meas and not meas when doing the derivative on the process variable
   if(coeff->deriv_on_PV)
-    yd = coeff->G1d * coeff->yi_n1 + coeff->G2d*(-meas - coeff->xn1);
+    yd = coeff->G1d * coeff->yi_n1 + G2Dcorr*(-meas - coeff->xn1);
   else
-    yd = coeff->G1d * coeff->yi_n1 + coeff->G2d*(   x  - coeff->xn1);
+    yd = coeff->G1d * coeff->yi_n1 + G2Dcorr*(   x  - coeff->xn1);
 
 
   y = yp + yi + yd;
