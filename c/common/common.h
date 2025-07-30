@@ -63,6 +63,7 @@ typedef    int16_t s16;
 // R5 application state
 #define R5CTRLR_IDLE     0
 #define R5CTRLR_WAVEGEN  1
+#define R5CTRLR_CTRLLOOP 2
 
 // recorder state
 #define RECORDER_IDLE          0

@@ -12,7 +12,7 @@
 
 #include "r5_main.h"
 
-//#define PROFILE
+#define PROFILE
 //#define PRINTOUT
 
 // ##########  globals  #######################
@@ -68,6 +68,7 @@ static XTmrCtr_Config *gTimerConfig;
 float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
 
+// ADC sampling and waveform generation
 double gFsampl;
 u16    dacval[4];
 s16    adcval[4];
@@ -77,6 +78,13 @@ int gR5ctrlState;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
 unsigned long gTotSweepSamples[4], gCurSweepSamples[4], curShmSampleNum;
+
+// control loop
+double     gCtrlLoop_input_MISO_A[5]={0., 1., 0., 0., 0.};
+double     gCtrlLoop_input_MISO_B[5]={1., 0., 0., 0., 0.};
+PID_GAINS  gCtrlLoop_PID1, gCtrlLoop_PID2;
+IIR2_COEFF gCtrlLoop_IIR1, gCtrlLoop_IIR2;
+
 
 // table of execution times for profiling;
 // entries are <x>, <x^2>, min, max, N_entries
@@ -1029,7 +1037,8 @@ void InitVars(void)
   // init vars
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
-  gR5ctrlState=R5CTRLR_IDLE;
+  //gR5ctrlState=R5CTRLR_IDLE;
+  gR5ctrlState=R5CTRLR_CTRLLOOP;
   gRecorderConfig.state=RECORDER_IDLE;
   gRecorderConfig.trig_chan=1;
   gRecorderConfig.mode=RECORDER_SLOPE;
@@ -1053,6 +1062,56 @@ void InitVars(void)
     gWavegenChanConfig[i].dt     = 1.;
     }
 
+  // control loop params
+
+  gCtrlLoop_PID1.Gp         =1.;
+  gCtrlLoop_PID1.Gi         =0.;
+  gCtrlLoop_PID1.G1d        =0.;
+  gCtrlLoop_PID1.G2d        =0.;
+  gCtrlLoop_PID1.G_aiw      =1.;
+  gCtrlLoop_PID1.out_sat    =1.;
+  gCtrlLoop_PID1.in_thr     =0.;
+  gCtrlLoop_PID1.deriv_on_PV=false;
+  gCtrlLoop_PID1.invert_cmd =false;
+  gCtrlLoop_PID1.invert_meas=false;
+  gCtrlLoop_PID1.xn1        =0.;
+  gCtrlLoop_PID1.yi_n1      =0.;
+  gCtrlLoop_PID1.yd_n1      =0.;
+
+  gCtrlLoop_PID2.Gp         =1.;
+  gCtrlLoop_PID2.Gi         =0.;
+  gCtrlLoop_PID2.G1d        =0.;
+  gCtrlLoop_PID2.G2d        =0.;
+  gCtrlLoop_PID2.G_aiw      =1.;
+  gCtrlLoop_PID2.out_sat    =1.;
+  gCtrlLoop_PID2.in_thr     =0.;
+  gCtrlLoop_PID2.deriv_on_PV=false;
+  gCtrlLoop_PID2.invert_cmd =false;
+  gCtrlLoop_PID2.invert_meas=false;
+  gCtrlLoop_PID2.xn1        =0.;
+  gCtrlLoop_PID2.yi_n1      =0.;
+  gCtrlLoop_PID2.yd_n1      =0.;
+  
+  gCtrlLoop_IIR1.a[0]  =1.;
+  gCtrlLoop_IIR1.a[1]  =0.;
+  gCtrlLoop_IIR1.a[2]  =0.;
+  gCtrlLoop_IIR1.b[0]  =0.;
+  gCtrlLoop_IIR1.b[1]  =0.;
+  gCtrlLoop_IIR1.x[0]  =0.;
+  gCtrlLoop_IIR1.x[1]  =0.;
+  gCtrlLoop_IIR1.y[0]  =0.;
+  gCtrlLoop_IIR1.y[1]  =0.;
+  
+  gCtrlLoop_IIR2.a[0]  =1.;
+  gCtrlLoop_IIR2.a[1]  =0.;
+  gCtrlLoop_IIR2.a[2]  =0.;
+  gCtrlLoop_IIR2.b[0]  =0.;
+  gCtrlLoop_IIR2.b[1]  =0.;
+  gCtrlLoop_IIR2.x[0]  =0.;
+  gCtrlLoop_IIR2.x[1]  =0.;
+  gCtrlLoop_IIR2.y[0]  =0.;
+  gCtrlLoop_IIR2.y[1]  =0.;
+
   // init number of IRQ served
   last_irq_cnt=0;
   for(i=0; i<4; i++)
@@ -1067,6 +1126,7 @@ int main()
   int          status, i;
   double       currtimer_us, sigma;
   double       dphase, alpha, dfreq;
+  double       cmd, y;
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -1284,6 +1344,16 @@ int main()
               }
             }
           break;
+        
+        case R5CTRLR_CTRLLOOP:
+          cmd=0.5;  // change me
+          y=MISO(g_x, gCtrlLoop_input_MISO_A, gCtrlLoop_input_MISO_B, 4);
+          y=PID(cmd,y,&gCtrlLoop_PID1);
+          y=IIR2(y,&gCtrlLoop_IIR1);
+          y=IIR2(y,&gCtrlLoop_IIR2);
+          y=PID(y,0.,&gCtrlLoop_PID2);
+          g_y[0]=y;  // change me
+          break;
         }
       
 
@@ -1431,9 +1501,14 @@ int main()
             }
           LPRINTF("\n\r");
           }
+        }
+      #endif  // PRINTOUT
 
-        // print profiling info
-        #ifdef PROFILE
+      #ifdef PROFILE
+      // every now and then print profiling info
+      if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= gFsampl)
+        {
+        last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
         LPRINTF("Number of Timer IRQs          : %d\n\r", last_irq_cnt);
 
         LPRINTF("Timer IRQ latency (us)        : avg= %d.%03d ; max= %d.%03d\n\r", 
@@ -1455,9 +1530,11 @@ int main()
           (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_MAX]) );
   
         LPRINTF("\n\r");
-        #endif  // PROFILE
+
+        // sometimes I may want to see short term changes, so I need to reset the time table
+        ResetTimeTable();
         }
-      #endif  // PRINTOUT
+      #endif  // PROFILE
 
       }  // if timer occurred
 

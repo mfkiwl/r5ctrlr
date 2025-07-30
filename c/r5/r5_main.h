@@ -42,6 +42,7 @@
 #include "max7301.h"
 #include "ad3552.h"
 #include "adaq23876.h"
+#include "doubledsplib.h"
 
 //---------- openamp stuff  ------------------------
 #define IPI_DEV_NAME         "poll_dev"

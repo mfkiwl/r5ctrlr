@@ -39,6 +39,8 @@ typedef struct
   double out_sat;    // output saturation limit
   double in_thr;     // input dead band
   bool deriv_on_PV;  // derivative on process variable?
+  bool invert_cmd;   // invert commanded value
+  bool invert_meas;  // invert measured value
   // internal "static" vars
   double xn1;        // x(n-1)
   double yi_n1;      // integral part at previous step = y_I(n-1)
