@@ -74,16 +74,21 @@ u16    dacval[4];
 s16    adcval[4];
 double g_x[4], g_x_1[4],g_y[4];
 double g2pi, gPhase[4], gFreq[4];
-int gR5ctrlState;
+bool gWavegenEnable, gCtrlLoopEnable;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
 unsigned long gTotSweepSamples[4], gCurSweepSamples[4], curShmSampleNum;
 
 // control loop
-double     gCtrlLoop_input_MISO_A[5]={0., 1., 0., 0., 0.};
-double     gCtrlLoop_input_MISO_B[5]={1., 0., 0., 0., 0.};
-PID_GAINS  gCtrlLoop_PID1, gCtrlLoop_PID2;
-IIR2_COEFF gCtrlLoop_IIR1, gCtrlLoop_IIR2;
+double     gCtrlLoop_input_MISO_A[4][5],
+           gCtrlLoop_input_MISO_B[4][5],
+           gCtrlLoop_input_MISO_C[4][5],
+           gCtrlLoop_input_MISO_D[4][5],
+           gCtrlLoop_output_MISO_E[4][5],
+           gCtrlLoop_output_MISO_F[4][5];
+PID_GAINS  gCtrlLoop_PID1[4], gCtrlLoop_PID2[4];
+IIR2_COEFF gCtrlLoop_IIR1[4], gCtrlLoop_IIR2[4];
+int gCtrlLoop_inputSelect[4], gCtrlLoop_outputSelect[4];
 
 
 // table of execution times for profiling;
@@ -210,15 +215,23 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       
       if(d==0)
-        gR5ctrlState=R5CTRLR_IDLE;
+        gWavegenEnable=false;
       else
-        gR5ctrlState=R5CTRLR_WAVEGEN;
+        gWavegenEnable=true;
       break;
 
     // send current state
     case RPMSGCMD_READ_STATE:
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_STATE;
-      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)gR5ctrlState;
+      // code section enables into bits
+      d=R5CTRLR_IDLE;
+      if(gRecorderConfig.state!=RECORDER_IDLE)
+        d|=R5CTRLR_RECORD;
+      if(gCtrlLoopEnable)
+        d|=R5CTRLR_CTRLLOOP;
+      if(gWavegenEnable)
+        d|=R5CTRLR_WAVEGEN;
+      ((R5_RPMSG_TYPE*)data)->data[0] = d;
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
@@ -1032,13 +1045,13 @@ void AddTimeToTable(int theindex, double thetime)
 
 void InitVars(void)
   {
-  int i;
+  int i,j;
 
   // init vars
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
-  //gR5ctrlState=R5CTRLR_IDLE;
-  gR5ctrlState=R5CTRLR_CTRLLOOP;
+  gWavegenEnable=false;
+  gCtrlLoopEnable=true;  // change me
   gRecorderConfig.state=RECORDER_IDLE;
   gRecorderConfig.trig_chan=1;
   gRecorderConfig.mode=RECORDER_SLOPE;
@@ -1064,53 +1077,77 @@ void InitVars(void)
 
   // control loop params
 
-  gCtrlLoop_PID1.Gp         =1.;
-  gCtrlLoop_PID1.Gi         =0.;
-  gCtrlLoop_PID1.G1d        =0.;
-  gCtrlLoop_PID1.G2d        =0.;
-  gCtrlLoop_PID1.G_aiw      =1.;
-  gCtrlLoop_PID1.out_sat    =1.;
-  gCtrlLoop_PID1.in_thr     =0.;
-  gCtrlLoop_PID1.deriv_on_PV=false;
-  gCtrlLoop_PID1.invert_cmd =false;
-  gCtrlLoop_PID1.invert_meas=false;
-  gCtrlLoop_PID1.xn1        =0.;
-  gCtrlLoop_PID1.yi_n1      =0.;
-  gCtrlLoop_PID1.yd_n1      =0.;
+  for(j=0; j<5; j++)
+    {
+    gCtrlLoop_input_MISO_A[i][j]=0.;
+    gCtrlLoop_input_MISO_B[i][j]=0.;
+    gCtrlLoop_input_MISO_C[i][j]=0.;
+    gCtrlLoop_input_MISO_D[i][j]=0.;
+    gCtrlLoop_output_MISO_E[i][j]=0.;
+    gCtrlLoop_output_MISO_F[i][j]=0.;
+    }
 
-  gCtrlLoop_PID2.Gp         =1.;
-  gCtrlLoop_PID2.Gi         =0.;
-  gCtrlLoop_PID2.G1d        =0.;
-  gCtrlLoop_PID2.G2d        =0.;
-  gCtrlLoop_PID2.G_aiw      =1.;
-  gCtrlLoop_PID2.out_sat    =1.;
-  gCtrlLoop_PID2.in_thr     =0.;
-  gCtrlLoop_PID2.deriv_on_PV=false;
-  gCtrlLoop_PID2.invert_cmd =false;
-  gCtrlLoop_PID2.invert_meas=false;
-  gCtrlLoop_PID2.xn1        =0.;
-  gCtrlLoop_PID2.yi_n1      =0.;
-  gCtrlLoop_PID2.yd_n1      =0.;
+  // identity matrix
+  gCtrlLoop_input_MISO_A[i][i+1]=1.;
+  gCtrlLoop_input_MISO_B[i][0]=1.;
+  gCtrlLoop_input_MISO_C[i][i+1]=1.;
+  gCtrlLoop_input_MISO_D[i][0]=1.;
+  gCtrlLoop_output_MISO_E[i][i+1]=1.;
+  gCtrlLoop_output_MISO_F[i][0]=1.;
+
+  // gCtrlLoop_inputSelect[i]=i;
+  gCtrlLoop_inputSelect[i]=4;  // change me
+  //gCtrlLoop_outputSelect[i]=OUTPUT_SELECT_WGEN;
+  gCtrlLoop_outputSelect[i]=OUTPUT_SELECT_CTRLR;  // change me
+
+  gCtrlLoop_PID1[i].Gp         =1.;
+  gCtrlLoop_PID1[i].Gi         =0.;
+  gCtrlLoop_PID1[i].G1d        =0.;
+  gCtrlLoop_PID1[i].G2d        =0.;
+  gCtrlLoop_PID1[i].G_aiw      =1.;
+  gCtrlLoop_PID1[i].out_sat    =1.;
+  gCtrlLoop_PID1[i].in_thr     =0.;
+  gCtrlLoop_PID1[i].deriv_on_PV=false;
+  gCtrlLoop_PID1[i].invert_cmd =false;
+  gCtrlLoop_PID1[i].invert_meas=false;
+  gCtrlLoop_PID1[i].xn1        =0.;
+  gCtrlLoop_PID1[i].yi_n1      =0.;
+  gCtrlLoop_PID1[i].yd_n1      =0.;
+
+  gCtrlLoop_PID2[i].Gp         =1.;
+  gCtrlLoop_PID2[i].Gi         =0.;
+  gCtrlLoop_PID2[i].G1d        =0.;
+  gCtrlLoop_PID2[i].G2d        =0.;
+  gCtrlLoop_PID2[i].G_aiw      =1.;
+  gCtrlLoop_PID2[i].out_sat    =1.;
+  gCtrlLoop_PID2[i].in_thr     =0.;
+  gCtrlLoop_PID2[i].deriv_on_PV=false;
+  gCtrlLoop_PID2[i].invert_cmd =false;
+  gCtrlLoop_PID2[i].invert_meas=false;
+  gCtrlLoop_PID2[i].xn1        =0.;
+  gCtrlLoop_PID2[i].yi_n1      =0.;
+  gCtrlLoop_PID2[i].yd_n1      =0.;
   
-  gCtrlLoop_IIR1.a[0]  =1.;
-  gCtrlLoop_IIR1.a[1]  =0.;
-  gCtrlLoop_IIR1.a[2]  =0.;
-  gCtrlLoop_IIR1.b[0]  =0.;
-  gCtrlLoop_IIR1.b[1]  =0.;
-  gCtrlLoop_IIR1.x[0]  =0.;
-  gCtrlLoop_IIR1.x[1]  =0.;
-  gCtrlLoop_IIR1.y[0]  =0.;
-  gCtrlLoop_IIR1.y[1]  =0.;
+  gCtrlLoop_IIR1[i].a[0]  =1.;
+  gCtrlLoop_IIR1[i].a[1]  =0.;
+  gCtrlLoop_IIR1[i].a[2]  =0.;
+  gCtrlLoop_IIR1[i].b[0]  =0.;
+  gCtrlLoop_IIR1[i].b[1]  =0.;
+  gCtrlLoop_IIR1[i].x[0]  =0.;
+  gCtrlLoop_IIR1[i].x[1]  =0.;
+  gCtrlLoop_IIR1[i].y[0]  =0.;
+  gCtrlLoop_IIR1[i].y[1]  =0.;
   
-  gCtrlLoop_IIR2.a[0]  =1.;
-  gCtrlLoop_IIR2.a[1]  =0.;
-  gCtrlLoop_IIR2.a[2]  =0.;
-  gCtrlLoop_IIR2.b[0]  =0.;
-  gCtrlLoop_IIR2.b[1]  =0.;
-  gCtrlLoop_IIR2.x[0]  =0.;
-  gCtrlLoop_IIR2.x[1]  =0.;
-  gCtrlLoop_IIR2.y[0]  =0.;
-  gCtrlLoop_IIR2.y[1]  =0.;
+  gCtrlLoop_IIR2[i].a[0]  =1.;
+  gCtrlLoop_IIR2[i].a[1]  =0.;
+  gCtrlLoop_IIR2[i].a[2]  =0.;
+  gCtrlLoop_IIR2[i].b[0]  =0.;
+  gCtrlLoop_IIR2[i].b[1]  =0.;
+  gCtrlLoop_IIR2[i].x[0]  =0.;
+  gCtrlLoop_IIR2[i].x[1]  =0.;
+  gCtrlLoop_IIR2[i].y[0]  =0.;
+  gCtrlLoop_IIR2[i].y[1]  =0.;
+
 
   // init number of IRQ served
   last_irq_cnt=0;
@@ -1126,7 +1163,7 @@ int main()
   int          status, i;
   double       currtimer_us, sigma;
   double       dphase, alpha, dfreq;
-  double       cmd, y;
+  double       cmd, loopvar[4];
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -1196,7 +1233,8 @@ int main()
         }
 
 
-      // shall we trigger the recorder?
+      // sample recorder  ----------------------------------------------------------------
+
       switch(gRecorderConfig.state)
         {
         case RECORDER_FORCE:
@@ -1252,116 +1290,143 @@ int main()
         }
 
 
-      // do something: either signal generator or controller (or idle)
+      // signal generator  ----------------------------------------------------------------
 
-      switch(gR5ctrlState)
+      if(gWavegenEnable)
         {
-        case R5CTRLR_IDLE:
-          break;
-        
-        case R5CTRLR_WAVEGEN:
-          for(i=0; i<4; i++)
+        for(i=0; i<4; i++)
+          {
+          if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_OFF)
+            g_y[i]=0.0;
+          else
             {
-            if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_OFF)
-              g_y[i]=0.0;
-            else
+            //channel is enabled
+            switch(gWavegenChanConfig[i].type)
               {
-              //channel is enabled
-              switch(gWavegenChanConfig[i].type)
-                {
-                case WGEN_CH_TYPE_DC:
-                  g_y[i]=gWavegenChanConfig[i].ampl;
-                  break;
+              case WGEN_CH_TYPE_DC:
+                g_y[i]=gWavegenChanConfig[i].ampl;
+                break;
 
-                case WGEN_CH_TYPE_SINE:
-                  // output current phase
-                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
-                  // calculate next phase
-                  dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
-                  gPhase[i] += dphase;
-                  if(gPhase[i]>g2pi)
-                    gPhase[i] -= g2pi;
-                  break;
+              case WGEN_CH_TYPE_SINE:
+                // output current phase
+                g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                // calculate next phase
+                dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
+                gPhase[i] += dphase;
+                if(gPhase[i]>g2pi)
+                  gPhase[i] -= g2pi;
+                break;
 
+              case WGEN_CH_TYPE_SWEEP:
 
-                case WGEN_CH_TYPE_SWEEP:
+                // if the recorder trigger mode is SWEEP and 
+                // the trigger is armed and
+                // this is the right trig channel and
+                // this is the first sample of the sweep,
+                // then force a trigger to start recording
+                if( (gRecorderConfig.trig_chan == (i+1)          ) &&
+                    (gRecorderConfig.state     == RECORDER_ARMED ) &&
+                    (gRecorderConfig.mode      == RECORDER_SWEEP ) &&
+                    (gCurSweepSamples[i]       == 0              ) )
+                  {
+                  gRecorderConfig.state=RECORDER_FORCE;
+                  }
 
-                  // if the recorder trigger mode is SWEEP and 
-                  // the trigger is armed and
-                  // this is the right trig channel and
-                  // this is the first sample of the sweep,
-                  // then force a trigger to start recording
-                  if( (gRecorderConfig.trig_chan == (i+1)          ) &&
-                      (gRecorderConfig.state     == RECORDER_ARMED ) &&
-                      (gRecorderConfig.mode      == RECORDER_SWEEP ) &&
-                      (gCurSweepSamples[i]       == 0              ) )
+                // output current phase
+                g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                // calculate next phase
+                if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
+                  {
+                  alpha=0;
+                  gTotSweepSamples[i]=0;
+                  }
+                else 
+                  {
+                  alpha=((double)(gWavegenChanConfig[i].f2)-gWavegenChanConfig[i].f1)/gWavegenChanConfig[i].dt;
+                  gTotSweepSamples[i]=gWavegenChanConfig[i].dt*gFsampl;
+                  }
+
+                gFreq[i]  += alpha/gFsampl;
+                dphase     = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
+                gPhase[i] += dphase;
+                if(gPhase[i]>g2pi)
+                  gPhase[i] -= g2pi;
+                
+                // check sweep status
+                gCurSweepSamples[i]++;
+                if(gCurSweepSamples[i]>=gTotSweepSamples[i])
+                  {
+                  // end of sweep
+                  if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_SINGLE)
                     {
-                    gRecorderConfig.state=RECORDER_FORCE;
+                    // stop after a single sweep
+                    gWavegenChanConfig[i].enable=WGEN_CH_ENABLE_OFF;
+                    gPhase[i]=0.;
+                    gFreq[i]=0.;
                     }
+                  else
+                    {
+                    // sweep forever: restart from f1
+                    gPhase[i]=0.;
+                    gFreq[i]=0.;
+                    gCurSweepSamples[i]=0;                      
+                    }
+                  }
+                break;
+              }  // switch/case on waveform type
+            }  // if channel enabled
+          }  // loop on 4 channels
+        }  // waveform generator
 
-                  // output current phase
-                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
-                  // calculate next phase
-                  if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
-                    {
-                    alpha=0;
-                    gTotSweepSamples[i]=0;
-                    }
-                  else 
-                    {
-                    alpha=((double)(gWavegenChanConfig[i].f2)-gWavegenChanConfig[i].f1)/gWavegenChanConfig[i].dt;
-                    gTotSweepSamples[i]=gWavegenChanConfig[i].dt*gFsampl;
-                    }
-
-                  gFreq[i]  += alpha/gFsampl;
-                  dphase     = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
-                  gPhase[i] += dphase;
-                  if(gPhase[i]>g2pi)
-                    gPhase[i] -= g2pi;
-                  
-                  // check sweep status
-                  gCurSweepSamples[i]++;
-                  if(gCurSweepSamples[i]>=gTotSweepSamples[i])
-                    {
-                    // end of sweep
-                    if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_SINGLE)
-                      {
-                      // stop after a single sweep
-                      gWavegenChanConfig[i].enable=WGEN_CH_ENABLE_OFF;
-                      gPhase[i]=0.;
-                      gFreq[i]=0.;
-                      }
-                    else
-                      {
-                      // sweep forever: restart from f1
-                      gPhase[i]=0.;
-                      gFreq[i]=0.;
-                      gCurSweepSamples[i]=0;                      
-                      }
-                    }
-                  break;
-                }
-              }
-            }
-          break;
-        
-        case R5CTRLR_CTRLLOOP:
-          cmd=0.5;  // change me
-          y=MISO(g_x, gCtrlLoop_input_MISO_A, gCtrlLoop_input_MISO_B, 4);
-          y=PID(cmd,y,&gCtrlLoop_PID1);
-          y=IIR2(y,&gCtrlLoop_IIR1);
-          y=IIR2(y,&gCtrlLoop_IIR2);
-          y=PID(y,0.,&gCtrlLoop_PID2);
-          g_y[0]=y;  // change me
-          break;
-        }
-      
 
       // register time of end of sine wave calculation
       #ifdef PROFILE
       currtimer_us=GetTimer_us();
       AddTimeToTable(2,currtimer_us);
       #endif
+
+
+      // control loop  ----------------------------------------------------------------
+
+      if(gCtrlLoopEnable)
+        {
+        // calculate loop channels first
+        for(i=0; i<4; i++)
+          {
+          // input selector: 
+          //  if 0 to 3, then use that channel of the waveform generator;
+          //  if 4, then use ADC via the appropriate MISO (multiple input single output) matrix
+          if(gCtrlLoop_inputSelect[i]>=4)
+            cmd=MISO(g_x, gCtrlLoop_input_MISO_C[i], gCtrlLoop_input_MISO_D[i], 4);
+          else
+            cmd=g_y[gCtrlLoop_inputSelect[i]];
+          
+          loopvar[i]=MISO(g_x, gCtrlLoop_input_MISO_A[i], gCtrlLoop_input_MISO_B[i], 4);
+          loopvar[i]=PID(cmd,loopvar[i],&gCtrlLoop_PID1[i]);
+          loopvar[i]=IIR2(loopvar[i],&gCtrlLoop_IIR1[i]);
+          loopvar[i]=IIR2(loopvar[i],&gCtrlLoop_IIR2[i]);
+          loopvar[i]=PID(loopvar[i],0.,&gCtrlLoop_PID2[i]);
+          }
+        
+        // now calculate output channels
+        for(i=0; i<4; i++)
+          {
+          if(gCtrlLoop_outputSelect[i]==OUTPUT_SELECT_CTRLR)
+            g_y[i]=MISO(loopvar, gCtrlLoop_output_MISO_E[i], gCtrlLoop_output_MISO_F[i], 4);
+          }
+        
+        }  // control loop
+
+
+      // register time of end of control loop calculation
+      #ifdef PROFILE
+      currtimer_us=GetTimer_us();
+      AddTimeToTable(3,currtimer_us);
+      #endif
+
+
+      // output to DAC  ----------------------------------------------------------------
+
 
       // write DACs from values with fullscale = 1 (g_y[i]) into raw (dacval[i])
 
@@ -1394,23 +1459,11 @@ int main()
         {
         last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
 
-        // // print current state
-        // LPRINTF("R5 state is ");
-        // switch(gR5ctrlState)
-        //   {
-        //   case R5CTRLR_IDLE:
-        //     LPRINTF("IDLE\n\r");
-        //     break;
-        //   case R5CTRLR_WAVEGEN:
-        //     LPRINTF("WAVEGEN\n\r");
-        //     break;
-        //   }
-          
         //  // print IRQ number
         //  LPRINTF("Tot IRQs so far: %d \n\r",last_irq_cnt);
 
-        // in IDLE mode print ADC values
-        if( gR5ctrlState == R5CTRLR_IDLE )
+        // print ADC values
+        if(true)
           {
           for(i=0; i<4; i++)
             // LPRINTF("ADC#%d = %3d.%03d ",
@@ -1422,8 +1475,8 @@ int main()
           LPRINTF("\n\r");
           }
 
-        // in WAVEGEN mode print channel configurations
-        if( gR5ctrlState == R5CTRLR_WAVEGEN )
+        // print channel configurations
+        if(true)
           {
           for(i=0; i<4; i++)
             {
@@ -1524,6 +1577,12 @@ int main()
           (int)(time_table[2][PROFTIME_AVG]), 
           (int)(sigma), DECIMALS(sigma, 3),
           (int)(time_table[2][PROFTIME_MAX]) );
+
+        sigma=time_table[3][PROFTIME_AVG2]-time_table[3][PROFTIME_AVG]*time_table[3][PROFTIME_AVG];
+        LPRINTF("End of Control Loop (us)      : avg= %d ; s= %d.%03d; max= %d\n\r", 
+          (int)(time_table[3][PROFTIME_AVG]), 
+          (int)(sigma), DECIMALS(sigma, 3),
+          (int)(time_table[3][PROFTIME_MAX]) );
 
         LPRINTF("Ctrl loop step end (us)       : avg= %d ; max= %d\n\r", 
           (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_AVG]), 

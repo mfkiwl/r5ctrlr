@@ -114,16 +114,7 @@ void parse_STB(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
         {
         case RPMSG_ANSWER_VALID:
           // print current state
-          switch(gR5ctrlState)
-            {
-            case R5CTRLR_IDLE:
-              snprintf(ans, maxlen, "%s: IDLE is current state\n", SCPI_OKS);
-              break;
-            case R5CTRLR_WAVEGEN:
-              snprintf(ans, maxlen, "%s: WAVEGEN is current state\n", SCPI_OKS);
-              break;
-            }
-
+          snprintf(ans, maxlen, "%s: %d is the status word\n", SCPI_OKS, gR5ctrlState);
           break;
         case RPMSG_ANSWER_TIMEOUT:
           snprintf(ans, maxlen, "%s: STATUS READ timed out\n", SCPI_ERRS);
@@ -1203,7 +1194,10 @@ void printHelp(int filedes)
   sendback(filedes,"Send CTRL-C (CTRL-D on windows) to close the connection\n\n");
   sendback(filedes,"Command list:\n\n");
   sendback(filedes,"*IDN?                         : print firmware name and version\n");
-  sendback(filedes,"*STB?                         : retrieve current state; answer is {IDLE|WAVEGEN}\n");
+  sendback(filedes,"*STB?                         : retrieve current state; answer is bit-coded:\n");
+  sendback(filedes,"                                  bit 0  = recorder enabled\n");
+  sendback(filedes,"                                  bit 1  = waveform generator enabled\n");
+  sendback(filedes,"                                  bit 2  = control loop enabled\n");
   sendback(filedes,"*RST                          : reset controller\n");
   sendback(filedes,"DAC <ch1> <ch2> <ch3> <ch4>   : write value of all 4 DAC channels;\n");
   sendback(filedes,"                                the values are 16-bit 2's complement integers\n");

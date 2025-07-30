@@ -62,8 +62,9 @@ typedef    int16_t s16;
 
 // R5 application state
 #define R5CTRLR_IDLE     0
-#define R5CTRLR_WAVEGEN  1
-#define R5CTRLR_CTRLLOOP 2
+#define R5CTRLR_RECORD   1
+#define R5CTRLR_WAVEGEN  2
+#define R5CTRLR_CTRLLOOP 4
 
 // recorder state
 #define RECORDER_IDLE          0
@@ -85,6 +86,9 @@ typedef    int16_t s16;
 #define WGEN_CH_TYPE_SINE        1
 #define WGEN_CH_TYPE_SWEEP       2
 
+// DAC output select
+#define OUTPUT_SELECT_WGEN   0
+#define OUTPUT_SELECT_CTRLR  1
 
 // ##########  types  #######################
 
