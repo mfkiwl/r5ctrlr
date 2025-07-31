@@ -70,9 +70,11 @@ int gTimerIRQoccurred;
 
 // ADC sampling and waveform generation
 double gFsampl;
-u16    dacval[4];
 s16    adcval[4];
+u16    dacval[4];
 double g_x[4], g_x_1[4],g_y[4];
+s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+double gADC_gain[4];
 double g2pi, gPhase[4], gFreq[4];
 bool gWavegenEnable, gCtrlLoopEnable;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
@@ -80,15 +82,17 @@ TRIG_CONFIG gRecorderConfig;
 unsigned long gTotSweepSamples[4], gCurSweepSamples[4], curShmSampleNum;
 
 // control loop
-double     gCtrlLoop_input_MISO_A[4][5],
-           gCtrlLoop_input_MISO_B[4][5],
-           gCtrlLoop_input_MISO_C[4][5],
-           gCtrlLoop_input_MISO_D[4][5],
-           gCtrlLoop_output_MISO_E[4][5],
-           gCtrlLoop_output_MISO_F[4][5];
-PID_GAINS  gCtrlLoop_PID1[4], gCtrlLoop_PID2[4];
-IIR2_COEFF gCtrlLoop_IIR1[4], gCtrlLoop_IIR2[4];
-int gCtrlLoop_inputSelect[4], gCtrlLoop_outputSelect[4];
+// double     gCtrlLoop_input_MISO_A[4][5],
+//            gCtrlLoop_input_MISO_B[4][5],
+//            gCtrlLoop_input_MISO_C[4][5],
+//            gCtrlLoop_input_MISO_D[4][5],
+//            gCtrlLoop_output_MISO_E[4][5],
+//            gCtrlLoop_output_MISO_F[4][5];
+// PID_GAINS  gCtrlLoop_PID1[4], gCtrlLoop_PID2[4];
+// IIR2_COEFF gCtrlLoop_IIR1[4], gCtrlLoop_IIR2[4];
+// int gCtrlLoop_inputSelect[4];
+CTRLLOOP_CH_CONFIG gCtrlLoopChanConfig[4];
+int gCtrlLoop_outputSelect[4];
 
 
 // table of execution times for profiling;
@@ -1062,6 +1066,9 @@ void InitVars(void)
     {
     g_x[i]=0.;
     g_y[i]=0.;
+    gADC_offs_cnt[i]=0;
+    gADC_gain[i]=1;
+
     gPhase[i]=0.;
     gFreq[i]=0.;
     gTotSweepSamples[i]=0;
@@ -1079,74 +1086,74 @@ void InitVars(void)
 
   for(j=0; j<5; j++)
     {
-    gCtrlLoop_input_MISO_A[i][j]=0.;
-    gCtrlLoop_input_MISO_B[i][j]=0.;
-    gCtrlLoop_input_MISO_C[i][j]=0.;
-    gCtrlLoop_input_MISO_D[i][j]=0.;
-    gCtrlLoop_output_MISO_E[i][j]=0.;
-    gCtrlLoop_output_MISO_F[i][j]=0.;
+    gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
+    gCtrlLoopChanConfig[i].input_MISO_B[j]=0.;
+    gCtrlLoopChanConfig[i].input_MISO_C[j]=0.;
+    gCtrlLoopChanConfig[i].input_MISO_D[j]=0.;
+    gCtrlLoopChanConfig[i].output_MISO_E[j]=0.;
+    gCtrlLoopChanConfig[i].output_MISO_F[j]=0.;
     }
 
   // identity matrix
-  gCtrlLoop_input_MISO_A[i][i+1]=1.;
-  gCtrlLoop_input_MISO_B[i][0]=1.;
-  gCtrlLoop_input_MISO_C[i][i+1]=1.;
-  gCtrlLoop_input_MISO_D[i][0]=1.;
-  gCtrlLoop_output_MISO_E[i][i+1]=1.;
-  gCtrlLoop_output_MISO_F[i][0]=1.;
+  gCtrlLoopChanConfig[i].input_MISO_A[i+1]=1.;
+  gCtrlLoopChanConfig[i].input_MISO_B[0]=1.;
+  gCtrlLoopChanConfig[i].input_MISO_C[i+1]=1.;
+  gCtrlLoopChanConfig[i].input_MISO_D[0]=1.;
+  gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
+  gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
 
-  // gCtrlLoop_inputSelect[i]=i;
-  gCtrlLoop_inputSelect[i]=4;  // change me
+  // gCtrlLoopChanConfig[i].inputSelect=i;
+  gCtrlLoopChanConfig[i].inputSelect=4;  // change me
   //gCtrlLoop_outputSelect[i]=OUTPUT_SELECT_WGEN;
   gCtrlLoop_outputSelect[i]=OUTPUT_SELECT_CTRLR;  // change me
 
-  gCtrlLoop_PID1[i].Gp         =1.;
-  gCtrlLoop_PID1[i].Gi         =0.;
-  gCtrlLoop_PID1[i].G1d        =0.;
-  gCtrlLoop_PID1[i].G2d        =0.;
-  gCtrlLoop_PID1[i].G_aiw      =1.;
-  gCtrlLoop_PID1[i].out_sat    =1.;
-  gCtrlLoop_PID1[i].in_thr     =0.;
-  gCtrlLoop_PID1[i].deriv_on_PV=false;
-  gCtrlLoop_PID1[i].invert_cmd =false;
-  gCtrlLoop_PID1[i].invert_meas=false;
-  gCtrlLoop_PID1[i].xn1        =0.;
-  gCtrlLoop_PID1[i].yi_n1      =0.;
-  gCtrlLoop_PID1[i].yd_n1      =0.;
+  gCtrlLoopChanConfig[i].PID1.Gp         =1.;
+  gCtrlLoopChanConfig[i].PID1.Gi         =0.;
+  gCtrlLoopChanConfig[i].PID1.G1d        =0.;
+  gCtrlLoopChanConfig[i].PID1.G2d        =0.;
+  gCtrlLoopChanConfig[i].PID1.G_aiw      =1.;
+  gCtrlLoopChanConfig[i].PID1.out_sat    =1.;
+  gCtrlLoopChanConfig[i].PID1.in_thr     =0.;
+  gCtrlLoopChanConfig[i].PID1.deriv_on_PV=false;
+  gCtrlLoopChanConfig[i].PID1.invert_cmd =false;
+  gCtrlLoopChanConfig[i].PID1.invert_meas=false;
+  gCtrlLoopChanConfig[i].PID1.xn1        =0.;
+  gCtrlLoopChanConfig[i].PID1.yi_n1      =0.;
+  gCtrlLoopChanConfig[i].PID1.yd_n1      =0.;
 
-  gCtrlLoop_PID2[i].Gp         =1.;
-  gCtrlLoop_PID2[i].Gi         =0.;
-  gCtrlLoop_PID2[i].G1d        =0.;
-  gCtrlLoop_PID2[i].G2d        =0.;
-  gCtrlLoop_PID2[i].G_aiw      =1.;
-  gCtrlLoop_PID2[i].out_sat    =1.;
-  gCtrlLoop_PID2[i].in_thr     =0.;
-  gCtrlLoop_PID2[i].deriv_on_PV=false;
-  gCtrlLoop_PID2[i].invert_cmd =false;
-  gCtrlLoop_PID2[i].invert_meas=false;
-  gCtrlLoop_PID2[i].xn1        =0.;
-  gCtrlLoop_PID2[i].yi_n1      =0.;
-  gCtrlLoop_PID2[i].yd_n1      =0.;
+  gCtrlLoopChanConfig[i].PID2.Gp         =1.;
+  gCtrlLoopChanConfig[i].PID2.Gi         =0.;
+  gCtrlLoopChanConfig[i].PID2.G1d        =0.;
+  gCtrlLoopChanConfig[i].PID2.G2d        =0.;
+  gCtrlLoopChanConfig[i].PID2.G_aiw      =1.;
+  gCtrlLoopChanConfig[i].PID2.out_sat    =1.;
+  gCtrlLoopChanConfig[i].PID2.in_thr     =0.;
+  gCtrlLoopChanConfig[i].PID2.deriv_on_PV=false;
+  gCtrlLoopChanConfig[i].PID2.invert_cmd =false;
+  gCtrlLoopChanConfig[i].PID2.invert_meas=false;
+  gCtrlLoopChanConfig[i].PID2.xn1        =0.;
+  gCtrlLoopChanConfig[i].PID2.yi_n1      =0.;
+  gCtrlLoopChanConfig[i].PID2.yd_n1      =0.;
   
-  gCtrlLoop_IIR1[i].a[0]  =1.;
-  gCtrlLoop_IIR1[i].a[1]  =0.;
-  gCtrlLoop_IIR1[i].a[2]  =0.;
-  gCtrlLoop_IIR1[i].b[0]  =0.;
-  gCtrlLoop_IIR1[i].b[1]  =0.;
-  gCtrlLoop_IIR1[i].x[0]  =0.;
-  gCtrlLoop_IIR1[i].x[1]  =0.;
-  gCtrlLoop_IIR1[i].y[0]  =0.;
-  gCtrlLoop_IIR1[i].y[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.a[0]  =1.;
+  gCtrlLoopChanConfig[i].IIR1.a[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.a[2]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.b[0]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.b[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.x[0]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.x[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.y[0]  =0.;
+  gCtrlLoopChanConfig[i].IIR1.y[1]  =0.;
   
-  gCtrlLoop_IIR2[i].a[0]  =1.;
-  gCtrlLoop_IIR2[i].a[1]  =0.;
-  gCtrlLoop_IIR2[i].a[2]  =0.;
-  gCtrlLoop_IIR2[i].b[0]  =0.;
-  gCtrlLoop_IIR2[i].b[1]  =0.;
-  gCtrlLoop_IIR2[i].x[0]  =0.;
-  gCtrlLoop_IIR2[i].x[1]  =0.;
-  gCtrlLoop_IIR2[i].y[0]  =0.;
-  gCtrlLoop_IIR2[i].y[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.a[0]  =1.;
+  gCtrlLoopChanConfig[i].IIR2.a[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.a[2]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.b[0]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.b[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.x[0]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.x[1]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.y[0]  =0.;
+  gCtrlLoopChanConfig[i].IIR2.y[1]  =0.;
 
 
   // init number of IRQ served
@@ -1223,13 +1230,16 @@ int main()
 
 
       // read ADCs into raw (adcval[i]) and with fullscale = 1.0 (g_x[i])
+      // taking into account offset and gain correction
       ReadADCs(adcval);
       for(i=0; i<4; i++)
         {
         // x_(n-1)
         g_x_1[i]=g_x[i];
         // x_(n)
-        g_x[i]=adcval[i]/ADAQ23876_FULLSCALE_CNT;
+        // offset correction must be applied before converting to floating point, 
+        // for best dynamic range exploitation
+        g_x[i]=(adcval[i]+gADC_offs_cnt[i])/ADAQ23876_FULLSCALE_CNT*gADC_gain[i];
         }
 
 
@@ -1396,23 +1406,23 @@ int main()
           // input selector: 
           //  if 0 to 3, then use that channel of the waveform generator;
           //  if 4, then use ADC via the appropriate MISO (multiple input single output) matrix
-          if(gCtrlLoop_inputSelect[i]>=4)
-            cmd=MISO(g_x, gCtrlLoop_input_MISO_C[i], gCtrlLoop_input_MISO_D[i], 4);
+          if(gCtrlLoopChanConfig[i].inputSelect >=4)
+            cmd=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_C, gCtrlLoopChanConfig[i].input_MISO_D, 4);
           else
-            cmd=g_y[gCtrlLoop_inputSelect[i]];
+            cmd=g_y[gCtrlLoopChanConfig[i].inputSelect];
           
-          loopvar[i]=MISO(g_x, gCtrlLoop_input_MISO_A[i], gCtrlLoop_input_MISO_B[i], 4);
-          loopvar[i]=PID(cmd,loopvar[i],&gCtrlLoop_PID1[i]);
-          loopvar[i]=IIR2(loopvar[i],&gCtrlLoop_IIR1[i]);
-          loopvar[i]=IIR2(loopvar[i],&gCtrlLoop_IIR2[i]);
-          loopvar[i]=PID(loopvar[i],0.,&gCtrlLoop_PID2[i]);
+          loopvar[i]=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_A, gCtrlLoopChanConfig[i].input_MISO_B, 4);
+          loopvar[i]=PID(cmd,loopvar[i],&(gCtrlLoopChanConfig[i].PID1));
+          loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR1));
+          loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR2));
+          loopvar[i]=PID(loopvar[i],0.,&(gCtrlLoopChanConfig[i].PID2));
           }
         
         // now calculate output channels
         for(i=0; i<4; i++)
           {
           if(gCtrlLoop_outputSelect[i]==OUTPUT_SELECT_CTRLR)
-            g_y[i]=MISO(loopvar, gCtrlLoop_output_MISO_E[i], gCtrlLoop_output_MISO_F[i], 4);
+            g_y[i]=MISO(loopvar, gCtrlLoopChanConfig[i].output_MISO_E, gCtrlLoopChanConfig[i].output_MISO_F, 4);
           }
         
         }  // control loop
@@ -1435,7 +1445,7 @@ int main()
       // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
       // so I just scale and offset at the end, which is clearer
       for(i=0; i<4; i++)
-        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
+        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+gDAC_offs_cnt[i]+AD3552_OFFS);
       
       status = WriteDacSamples(0,dacval[0], dacval[1]);
       status = WriteDacSamples(1,dacval[2], dacval[3]);
