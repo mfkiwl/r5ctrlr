@@ -312,7 +312,7 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
 
 //-------------------------------------------------------------------
 
-void parse_DACCHOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
   int nch,offs;
@@ -373,6 +373,8 @@ void parse_DACCHOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
     }
   else
     {
+    // WRITE: set DAC oddset correction for a particular channel
+
     // parse the values of DAC channel offset;
     // format is 16 bit 2's complement int, written in decimal
 
@@ -469,6 +471,251 @@ void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
   else
     {
     snprintf(ans, maxlen, "%s: write operation not supported\n", SCPI_ERRS);
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,offs;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request ADC channel offset
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ADC channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_ADCOFFS;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: ADC OFFS READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %d is the offset of ADC channel #%d\n", SCPI_OKS, gADC_offs_cnt[nch-1], nch);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: ADC OFFS READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: ADC OFFS READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: set ADC offset correction for a particular channel
+
+    // parse the values of ADC channel offset;
+    // format is 16 bit 2's complement int, written in decimal
+
+    // next in line is the desired ADC channel
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      nch=(int)strtol(p, NULL, 10);
+      if(errno!=0 && nch==0)
+        {
+        snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
+        }
+      else
+        {
+        if((nch<1)||(nch>4))
+          {
+          snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
+          }
+        else
+          {
+          // next in line is the ADC offset value
+          p=strtok(NULL," ");
+          if(p!=NULL)
+            {
+            offs=(int)strtol(p, NULL, 10);
+            if(errno!=0 && offs==0)
+              {
+              snprintf(ans, maxlen, "%s: invalid ADC offset\n", SCPI_ERRS);
+              }
+            else
+              {
+              // everything is ready: send rpmsg to R5
+              rpmsglen=sizeof(R5_RPMSG_TYPE);
+              rpmsg_ptr->command = RPMSGCMD_WRITE_ADCOFFS;
+              rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
+              numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+              if(numbytes<rpmsglen)
+                snprintf(ans, maxlen, "%s: ADC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
+              else
+                snprintf(ans, maxlen, "%s: ADC CH %d has offset %d\n", SCPI_OKS, nch, offs);
+              }
+            }
+          else
+            {
+            snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
+            }
+          }
+        }
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing ADC channel\n", SCPI_ERRS);
+      }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_ADCGAIN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,offs;
+  int numbytes, rpmsglen, status;
+  float g;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request ADC channel offset
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ADC channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_ADCGAIN;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: ADC GAIN READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %f is the gain of ADC channel #%d\n", SCPI_OKS, gADC_gain[nch-1], nch);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: ADC GAIN READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: ADC GAIN READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: set ADC gain correction for a particular channel
+
+    // parse the values of ADC channel gain correction (float)
+
+    // next in line is the desired ADC channel
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      nch=(int)strtol(p, NULL, 10);
+      if(errno!=0 && nch==0)
+        {
+        snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
+        }
+      else
+        {
+        if((nch<1)||(nch>4))
+          {
+          snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
+          }
+        else
+          {
+          // next in line is the ADC gain value (float)
+          p=strtok(NULL," ");
+          if(p!=NULL)
+            {
+            g=strtof(p, NULL);
+            // error check with float does not work
+            // if(errno!=0 && errno!=EIO && g==0.0F)
+            //   {
+            //   snprintf(ans, maxlen, "%s: invalid ADC gain\n", SCPI_ERRS);
+            //   return;
+            //   }
+            // everything is ready: send rpmsg to R5
+            rpmsglen=sizeof(R5_RPMSG_TYPE);
+            rpmsg_ptr->command = RPMSGCMD_WRITE_ADCGAIN;
+            rpmsg_ptr->data[0] = (u32)(nch);
+            // write floating point values directly as float (32 bit)
+            memcpy(&(rpmsg_ptr->data[1]), &g, sizeof(u32));
+            numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+            if(numbytes<rpmsglen)
+              snprintf(ans, maxlen, "%s: ADC:CH:GAIN WRITE rpmsg_send() failed\n", SCPI_ERRS);
+            else
+              snprintf(ans, maxlen, "%s: ADC CH %d has gain %f\n", SCPI_OKS, nch, g);
+            }
+          else
+            {
+            snprintf(ans, maxlen, "%s: missing GAIN value\n", SCPI_ERRS);
+            }
+          }
+        }
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing ADC channel\n", SCPI_ERRS);
+      }
     }
   }
 
@@ -1329,10 +1576,15 @@ void printHelp(int filedes)
   sendback(filedes,"                                in decimal notation\n");
   sendback(filedes,"DAC:CH:OFFSet <nch> <val>     : set/get the offset of DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
-  sendback(filedes,"                                in decimal notation;\n");
+  sendback(filedes,"                                in decimal notation\n");
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
   sendback(filedes,"                                of the sampling clock\n");
+  sendback(filedes,"ADC:CH:OFFSet <nch> <val>     : set/get the offset of ADC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
+  sendback(filedes,"                                in decimal notation\n");
+  sendback(filedes,"ADC:CH:Gain <nch> <val>       : set/get the gain of ADC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                <value> is in floating point\n");
   sendback(filedes,"FSAMPL <val>                  : request to change sampling frequency to <val> Hz;\n");
   sendback(filedes,"                                it will be approximated to the closest possible frequency;\n");
   sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
@@ -1420,9 +1672,13 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
   else if(strcmp(p,"DAC:CH")==0)
     parse_DACCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"DAC:CH:OFFS")==0) || (strcmp(p,"DAC:CH:OFFSET")==0) )
-    parse_DACCHOFFS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+    parse_DACOFFS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"ADC:CH:OFFS")==0) || (strcmp(p,"ADC:CH:OFFSET")==0) )
+    parse_ADCOFFS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"ADC:CH:G")==0) || (strcmp(p,"ADC:CH:GAIN")==0) )
+    parse_ADCGAIN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"FSAMPL")==0)
     parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN")==0)

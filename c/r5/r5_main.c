@@ -75,7 +75,7 @@ u16    dacval[4];
 double g_x[4], g_x_1[4],g_y[4];
 s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
 int gDAC_outputSelect[4];
-double gADC_gain[4];
+float gADC_gain[4];
 double g2pi, gPhase[4], gFreq[4];
 bool gWavegenEnable, gCtrlLoopEnable;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
@@ -174,7 +174,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
 
-    // read back config of one wavefrom generator channel
+    // read back offset of a particular DAC channel
     case RPMSGCMD_READ_DACOFFS:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
@@ -207,6 +207,78 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("ADC READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+    // update ADC channel offset with the value requested by linux
+    case RPMSGCMD_WRITE_ADCOFFS:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      d2=(s16)(d&0x0000FFFF);
+      nch=(d>>16)&0x0000FFFF;
+      if((nch>=1)&&(nch<=4))
+        gADC_offs_cnt[nch-1]=d2;
+      else
+        {
+        LPRINTF("RPMSGCMD_WRITE_ADCOFFS index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      break;
+
+    // read back offset of a particular ADC channel
+    case RPMSGCMD_READ_ADCOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_ADCOFFS index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADCOFFS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gADC_offs_cnt[nch-1]);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("ADC OFFS READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+    // update ADC channel gain with the value requested by linux
+    case RPMSGCMD_WRITE_ADCGAIN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch>=1)&&(nch<=4))
+        // read floating point values directly as float (32 bit)
+        memcpy(&(gADC_gain[nch-1]), &(((R5_RPMSG_TYPE*)data)->data[1]), sizeof(u32));
+      else
+        {
+        LPRINTF("RPMSGCMD_WRITE_ADCGAIN index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      break;
+
+    // read back gain of a particular ADC channel
+    case RPMSGCMD_READ_ADCGAIN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_ADCGAIN index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADCGAIN;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[1]), &(gADC_gain[nch-1]), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("ADC GAIN READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
@@ -1093,7 +1165,7 @@ void InitVars(void)
     g_x[i]=0.;
     g_y[i]=0.;
     gADC_offs_cnt[i]=0;
-    gADC_gain[i]=1;
+    gADC_gain[i]=1.;
     gDAC_offs_cnt[i]=0;
 
     gPhase[i]=0.;
@@ -1266,7 +1338,7 @@ int main()
         // x_(n)
         // offset correction must be applied before converting to floating point, 
         // for best dynamic range exploitation
-        g_x[i]=(adcval[i]+gADC_offs_cnt[i])/ADAQ23876_FULLSCALE_CNT*gADC_gain[i];
+        g_x[i]=(adcval[i]+gADC_offs_cnt[i])/ADAQ23876_FULLSCALE_CNT*(double)(gADC_gain[i]);
         }
 
 

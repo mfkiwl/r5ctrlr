@@ -126,7 +126,6 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
-      
       gDAC_offs_cnt[nch-1] = (s16)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
@@ -138,6 +137,23 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       d=((R5_RPMSG_TYPE*)data)->data[1];
       g_adcval[2]=(s16)(d&0x0000FFFF);
       g_adcval[3]=(s16)((d>>16)&0x0000FFFF);
+      break;
+
+    // readback ADC offset sent by R5
+    case RPMSGCMD_READ_ADCOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      gADC_offs_cnt[nch-1] = (s16)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback ADC gain sent by R5
+    case RPMSGCMD_READ_ADCGAIN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gADC_gain[nch-1]), &(((R5_RPMSG_TYPE*)data)->data[1]), sizeof(u32));
       break;
 
     // readback sampling frequency

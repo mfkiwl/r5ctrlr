@@ -62,6 +62,10 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_TRIG_CFG      17
 #define RPMSGCMD_WRITE_DACOFFS      18
 #define RPMSGCMD_READ_DACOFFS       19
+#define RPMSGCMD_WRITE_ADCOFFS      20
+#define RPMSGCMD_READ_ADCOFFS       21
+#define RPMSGCMD_WRITE_ADCGAIN      22
+#define RPMSGCMD_READ_ADCGAIN       23
 
 // R5 application state
 #define R5CTRLR_IDLE     0
