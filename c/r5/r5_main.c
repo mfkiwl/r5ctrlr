@@ -74,6 +74,7 @@ s16    adcval[4];
 u16    dacval[4];
 double g_x[4], g_x_1[4],g_y[4];
 s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+int gDAC_outputSelect[4];
 double gADC_gain[4];
 double g2pi, gPhase[4], gFreq[4];
 bool gWavegenEnable, gCtrlLoopEnable;
@@ -81,18 +82,7 @@ WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
 unsigned long gTotSweepSamples[4], gCurSweepSamples[4], curShmSampleNum;
 
-// control loop
-// double     gCtrlLoop_input_MISO_A[4][5],
-//            gCtrlLoop_input_MISO_B[4][5],
-//            gCtrlLoop_input_MISO_C[4][5],
-//            gCtrlLoop_input_MISO_D[4][5],
-//            gCtrlLoop_output_MISO_E[4][5],
-//            gCtrlLoop_output_MISO_F[4][5];
-// PID_GAINS  gCtrlLoop_PID1[4], gCtrlLoop_PID2[4];
-// IIR2_COEFF gCtrlLoop_IIR1[4], gCtrlLoop_IIR2[4];
-// int gCtrlLoop_inputSelect[4];
 CTRLLOOP_CH_CONFIG gCtrlLoopChanConfig[4];
-int gCtrlLoop_outputSelect[4];
 
 
 // table of execution times for profiling;
@@ -109,7 +99,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)src;    // avoid warning on unused parameter
   (void)ept;    // avoid warning on unused parameter
 
-  u32 cmd, d;
+  u32 cmd, d, d2;
   int i, numbytes, rpmsglen, ret, nch;
   double dval;
 
@@ -166,6 +156,42 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("DAC READBACK incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+    // update DAC channel offset with the value requested by linux
+    case RPMSGCMD_WRITE_DACOFFS:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      d2=(s16)(d&0x0000FFFF);
+      nch=(d>>16)&0x0000FFFF;
+      if((nch>=1)&&(nch<=4))
+        gDAC_offs_cnt[nch-1]=d2;
+      else
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACOFFS index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      break;
+
+    // read back config of one wavefrom generator channel
+    case RPMSGCMD_READ_DACOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_DACOFFS index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOFFS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gDAC_offs_cnt[nch-1]);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("DAC OFFS READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
@@ -1068,6 +1094,7 @@ void InitVars(void)
     g_y[i]=0.;
     gADC_offs_cnt[i]=0;
     gADC_gain[i]=1;
+    gDAC_offs_cnt[i]=0;
 
     gPhase[i]=0.;
     gFreq[i]=0.;
@@ -1080,80 +1107,80 @@ void InitVars(void)
     gWavegenChanConfig[i].f1     = 0.;
     gWavegenChanConfig[i].f2     = 0.;
     gWavegenChanConfig[i].dt     = 1.;
-    }
 
-  // control loop params
-
-  for(j=0; j<5; j++)
-    {
-    gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
-    gCtrlLoopChanConfig[i].input_MISO_B[j]=0.;
-    gCtrlLoopChanConfig[i].input_MISO_C[j]=0.;
-    gCtrlLoopChanConfig[i].input_MISO_D[j]=0.;
-    gCtrlLoopChanConfig[i].output_MISO_E[j]=0.;
-    gCtrlLoopChanConfig[i].output_MISO_F[j]=0.;
-    }
-
-  // identity matrix
-  gCtrlLoopChanConfig[i].input_MISO_A[i+1]=1.;
-  gCtrlLoopChanConfig[i].input_MISO_B[0]=1.;
-  gCtrlLoopChanConfig[i].input_MISO_C[i+1]=1.;
-  gCtrlLoopChanConfig[i].input_MISO_D[0]=1.;
-  gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
-  gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
-
-  // gCtrlLoopChanConfig[i].inputSelect=i;
-  gCtrlLoopChanConfig[i].inputSelect=4;  // change me
-  //gCtrlLoop_outputSelect[i]=OUTPUT_SELECT_WGEN;
-  gCtrlLoop_outputSelect[i]=OUTPUT_SELECT_CTRLR;  // change me
-
-  gCtrlLoopChanConfig[i].PID1.Gp         =1.;
-  gCtrlLoopChanConfig[i].PID1.Gi         =0.;
-  gCtrlLoopChanConfig[i].PID1.G1d        =0.;
-  gCtrlLoopChanConfig[i].PID1.G2d        =0.;
-  gCtrlLoopChanConfig[i].PID1.G_aiw      =1.;
-  gCtrlLoopChanConfig[i].PID1.out_sat    =1.;
-  gCtrlLoopChanConfig[i].PID1.in_thr     =0.;
-  gCtrlLoopChanConfig[i].PID1.deriv_on_PV=false;
-  gCtrlLoopChanConfig[i].PID1.invert_cmd =false;
-  gCtrlLoopChanConfig[i].PID1.invert_meas=false;
-  gCtrlLoopChanConfig[i].PID1.xn1        =0.;
-  gCtrlLoopChanConfig[i].PID1.yi_n1      =0.;
-  gCtrlLoopChanConfig[i].PID1.yd_n1      =0.;
-
-  gCtrlLoopChanConfig[i].PID2.Gp         =1.;
-  gCtrlLoopChanConfig[i].PID2.Gi         =0.;
-  gCtrlLoopChanConfig[i].PID2.G1d        =0.;
-  gCtrlLoopChanConfig[i].PID2.G2d        =0.;
-  gCtrlLoopChanConfig[i].PID2.G_aiw      =1.;
-  gCtrlLoopChanConfig[i].PID2.out_sat    =1.;
-  gCtrlLoopChanConfig[i].PID2.in_thr     =0.;
-  gCtrlLoopChanConfig[i].PID2.deriv_on_PV=false;
-  gCtrlLoopChanConfig[i].PID2.invert_cmd =false;
-  gCtrlLoopChanConfig[i].PID2.invert_meas=false;
-  gCtrlLoopChanConfig[i].PID2.xn1        =0.;
-  gCtrlLoopChanConfig[i].PID2.yi_n1      =0.;
-  gCtrlLoopChanConfig[i].PID2.yd_n1      =0.;
+    // control loop params
   
-  gCtrlLoopChanConfig[i].IIR1.a[0]  =1.;
-  gCtrlLoopChanConfig[i].IIR1.a[1]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.a[2]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.b[0]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.b[1]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.x[0]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.x[1]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.y[0]  =0.;
-  gCtrlLoopChanConfig[i].IIR1.y[1]  =0.;
+    for(j=0; j<5; j++)
+      {
+      gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_B[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_C[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_D[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_E[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_F[j]=0.;
+      }
   
-  gCtrlLoopChanConfig[i].IIR2.a[0]  =1.;
-  gCtrlLoopChanConfig[i].IIR2.a[1]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.a[2]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.b[0]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.b[1]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.x[0]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.x[1]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.y[0]  =0.;
-  gCtrlLoopChanConfig[i].IIR2.y[1]  =0.;
+    // identity matrix
+    gCtrlLoopChanConfig[i].input_MISO_A[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_B[0]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_C[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_D[0]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
+
+    // gCtrlLoopChanConfig[i].inputSelect=i;
+    gCtrlLoopChanConfig[i].inputSelect=4;  // change me
+    //gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
+    gDAC_outputSelect[i]=OUTPUT_SELECT_CTRLR;  // change me
+  
+    gCtrlLoopChanConfig[i].PID1.Gp         =1.;
+    gCtrlLoopChanConfig[i].PID1.Gi         =0.;
+    gCtrlLoopChanConfig[i].PID1.G1d        =0.;
+    gCtrlLoopChanConfig[i].PID1.G2d        =0.;
+    gCtrlLoopChanConfig[i].PID1.G_aiw      =1.;
+    gCtrlLoopChanConfig[i].PID1.out_sat    =1.;
+    gCtrlLoopChanConfig[i].PID1.in_thr     =0.;
+    gCtrlLoopChanConfig[i].PID1.deriv_on_PV=false;
+    gCtrlLoopChanConfig[i].PID1.invert_cmd =false;
+    gCtrlLoopChanConfig[i].PID1.invert_meas=false;
+    gCtrlLoopChanConfig[i].PID1.xn1        =0.;
+    gCtrlLoopChanConfig[i].PID1.yi_n1      =0.;
+    gCtrlLoopChanConfig[i].PID1.yd_n1      =0.;
+  
+    gCtrlLoopChanConfig[i].PID2.Gp         =1.;
+    gCtrlLoopChanConfig[i].PID2.Gi         =0.;
+    gCtrlLoopChanConfig[i].PID2.G1d        =0.;
+    gCtrlLoopChanConfig[i].PID2.G2d        =0.;
+    gCtrlLoopChanConfig[i].PID2.G_aiw      =1.;
+    gCtrlLoopChanConfig[i].PID2.out_sat    =1.;
+    gCtrlLoopChanConfig[i].PID2.in_thr     =0.;
+    gCtrlLoopChanConfig[i].PID2.deriv_on_PV=false;
+    gCtrlLoopChanConfig[i].PID2.invert_cmd =false;
+    gCtrlLoopChanConfig[i].PID2.invert_meas=false;
+    gCtrlLoopChanConfig[i].PID2.xn1        =0.;
+    gCtrlLoopChanConfig[i].PID2.yi_n1      =0.;
+    gCtrlLoopChanConfig[i].PID2.yd_n1      =0.;
+    
+    gCtrlLoopChanConfig[i].IIR1.a[0]  =1.;
+    gCtrlLoopChanConfig[i].IIR1.a[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.a[2]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.b[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.b[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.x[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.x[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.y[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.y[1]  =0.;
+    
+    gCtrlLoopChanConfig[i].IIR2.a[0]  =1.;
+    gCtrlLoopChanConfig[i].IIR2.a[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.a[2]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.b[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.b[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.x[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.x[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.y[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.y[1]  =0.;
+    }
 
 
   // init number of IRQ served
@@ -1421,7 +1448,7 @@ int main()
         // now calculate output channels
         for(i=0; i<4; i++)
           {
-          if(gCtrlLoop_outputSelect[i]==OUTPUT_SELECT_CTRLR)
+          if(gDAC_outputSelect[i]==OUTPUT_SELECT_CTRLR)
             g_y[i]=MISO(loopvar, gCtrlLoopChanConfig[i].output_MISO_E, gCtrlLoopChanConfig[i].output_MISO_F, 4);
           }
         

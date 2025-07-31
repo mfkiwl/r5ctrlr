@@ -24,11 +24,14 @@ static int ept_deleted = 0;
 int gIncomingRpmsgs;
 
 s16 g_adcval[4], g_dacval[4];
+s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+int gDAC_outputSelect[4];
+float gADC_gain[4];
 u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
 int gR5ctrlState;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
-
+CTRLLOOP_CH_CONFIG gCtrlLoopChanConfig[4];
 
 
 struct remoteproc_priv rproc_priv = 
@@ -116,6 +119,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       d=((R5_RPMSG_TYPE*)data)->data[1];
       g_dacval[2]=(s16)(d&0x0000FFFF);
       g_dacval[3]=(s16)((d>>16)&0x0000FFFF);
+      break;
+
+    // readback DAC offset sent by R5
+    case RPMSGCMD_READ_DACOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      gDAC_offs_cnt[nch-1] = (s16)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
     // readback ADC values sent by R5
@@ -354,6 +366,111 @@ int CleanupSystem(void *platform)
 
 // -----------------------------------------------------------
 
+void InitVars(void)
+  {
+  int i,j;
+
+  gR5ctrlState=R5CTRLR_IDLE;
+  gIncomingRpmsgs=0;
+  gFsampl=DEFAULT_TIMER_FREQ_HZ;  // 10 kHz default Fsampling
+  gRecorderConfig.state=RECORDER_IDLE;
+  gRecorderConfig.trig_chan=1;
+  gRecorderConfig.mode=RECORDER_SLOPE;
+  gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
+  gRecorderConfig.level=0.;
+
+  for (i=0; i<4; i++)
+    {
+    g_adcval[i]=0;
+    g_dacval[i]=0;
+    gADC_offs_cnt[i]=0;
+    gADC_gain[i]=1;
+    gDAC_offs_cnt[i]=0;
+
+    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
+    gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
+    gWavegenChanConfig[i].ampl   = 0.;
+    gWavegenChanConfig[i].offs   = 0.;
+    gWavegenChanConfig[i].f1     = 0.;
+    gWavegenChanConfig[i].f2     = 0.;
+    gWavegenChanConfig[i].dt     = 1.;
+
+    // control loop params
+  
+    for(j=0; j<5; j++)
+      {
+      gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_B[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_C[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_D[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_E[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_F[j]=0.;
+      }
+
+    // identity matrix
+    gCtrlLoopChanConfig[i].input_MISO_A[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_B[0]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_C[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_D[0]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
+  
+    gCtrlLoopChanConfig[i].inputSelect=i;
+    gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
+  
+    gCtrlLoopChanConfig[i].PID1.Gp         =1.;
+    gCtrlLoopChanConfig[i].PID1.Gi         =0.;
+    gCtrlLoopChanConfig[i].PID1.G1d        =0.;
+    gCtrlLoopChanConfig[i].PID1.G2d        =0.;
+    gCtrlLoopChanConfig[i].PID1.G_aiw      =1.;
+    gCtrlLoopChanConfig[i].PID1.out_sat    =1.;
+    gCtrlLoopChanConfig[i].PID1.in_thr     =0.;
+    gCtrlLoopChanConfig[i].PID1.deriv_on_PV=false;
+    gCtrlLoopChanConfig[i].PID1.invert_cmd =false;
+    gCtrlLoopChanConfig[i].PID1.invert_meas=false;
+    gCtrlLoopChanConfig[i].PID1.xn1        =0.;
+    gCtrlLoopChanConfig[i].PID1.yi_n1      =0.;
+    gCtrlLoopChanConfig[i].PID1.yd_n1      =0.;
+
+    gCtrlLoopChanConfig[i].PID2.Gp         =1.;
+    gCtrlLoopChanConfig[i].PID2.Gi         =0.;
+    gCtrlLoopChanConfig[i].PID2.G1d        =0.;
+    gCtrlLoopChanConfig[i].PID2.G2d        =0.;
+    gCtrlLoopChanConfig[i].PID2.G_aiw      =1.;
+    gCtrlLoopChanConfig[i].PID2.out_sat    =1.;
+    gCtrlLoopChanConfig[i].PID2.in_thr     =0.;
+    gCtrlLoopChanConfig[i].PID2.deriv_on_PV=false;
+    gCtrlLoopChanConfig[i].PID2.invert_cmd =false;
+    gCtrlLoopChanConfig[i].PID2.invert_meas=false;
+    gCtrlLoopChanConfig[i].PID2.xn1        =0.;
+    gCtrlLoopChanConfig[i].PID2.yi_n1      =0.;
+    gCtrlLoopChanConfig[i].PID2.yd_n1      =0.;
+    
+    gCtrlLoopChanConfig[i].IIR1.a[0]  =1.;
+    gCtrlLoopChanConfig[i].IIR1.a[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.a[2]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.b[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.b[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.x[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.x[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.y[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR1.y[1]  =0.;
+    
+    gCtrlLoopChanConfig[i].IIR2.a[0]  =1.;
+    gCtrlLoopChanConfig[i].IIR2.a[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.a[2]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.b[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.b[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.x[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.x[1]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.y[0]  =0.;
+    gCtrlLoopChanConfig[i].IIR2.y[1]  =0.;
+
+    }
+  }
+
+// -----------------------------------------------------------
+
 int main(int argc, char *argv[])
   {
   int status, numbytes, rpmsglen;
@@ -373,28 +490,7 @@ int main(int argc, char *argv[])
   LPRINTF("\r\nR5 test application #5 : shared PL resources + IRQs + IPC (openamp)\r\n\r\n");
   LPRINTF("This is A53/linux side\r\n\r\n");
 
-  // init vars
-  gR5ctrlState=R5CTRLR_IDLE;
-  gIncomingRpmsgs=0;
-  gFsampl=DEFAULT_TIMER_FREQ_HZ;  // 10 kHz default Fsampling
-  gRecorderConfig.state=RECORDER_IDLE;
-  gRecorderConfig.trig_chan=1;
-  gRecorderConfig.mode=RECORDER_SLOPE;
-  gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
-  gRecorderConfig.level=0.;
-
-  for (i=0; i<4; i++)
-    {
-    g_adcval[i]=0;
-    g_dacval[i]=0;
-    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
-    gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
-    gWavegenChanConfig[i].ampl   = 0.;
-    gWavegenChanConfig[i].offs   = 0.;
-    gWavegenChanConfig[i].f1     = 0.;
-    gWavegenChanConfig[i].f2     = 0.;
-    gWavegenChanConfig[i].dt     = 1.;
-    }
+  InitVars();
 
   status = SetupSystem(&gplatform);
   if(status!=0)

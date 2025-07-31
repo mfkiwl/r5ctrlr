@@ -13,6 +13,7 @@
 #define COMMON_H_
 
 #include <math.h>
+#include <stdbool.h>
 
 // ##########  local defs  ###################
 
@@ -59,6 +60,8 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_TRIG          15
 #define RPMSGCMD_WRITE_TRIG_CFG     16
 #define RPMSGCMD_READ_TRIG_CFG      17
+#define RPMSGCMD_WRITE_DACOFFS      18
+#define RPMSGCMD_READ_DACOFFS       19
 
 // R5 application state
 #define R5CTRLR_IDLE     0
@@ -107,6 +110,46 @@ typedef struct
   int    slopedir;  // RISING/FALLING
   float  level;
   } TRIG_CONFIG;
+
+typedef struct
+  {
+  // user coeff
+  double a[3]; // x_i coeff
+  double b[2]; // y_i coeff
+  // internal "static" vars
+  double x[2]; // x pipeline
+  double y[2]; // y pipeline
+  } IIR2_COEFF;
+
+typedef struct
+  {
+  // user gains
+  double Gp;         // prop gain
+  double Gi;         // integr gain
+  double G1d;        // deriv gain #1
+  double G2d;        // deriv gain #2
+  double G_aiw;      // anti integral windup gain
+  double out_sat;    // output saturation limit
+  double in_thr;     // input dead band
+  bool deriv_on_PV;  // derivative on process variable?
+  bool invert_cmd;   // invert commanded value
+  bool invert_meas;  // invert measured value
+  // internal "static" vars
+  double xn1;        // x(n-1)
+  double yi_n1;      // integral part at previous step = y_I(n-1)
+  double yd_n1;      // derivative part at previous step = y_D(n-1)
+  } PID_GAINS;
+
+typedef struct
+  {
+  int inputSelect;
+  double input_MISO_A[5], input_MISO_B[5],
+         input_MISO_C[5], input_MISO_D[5],
+         output_MISO_E[5], output_MISO_F[5];
+  PID_GAINS  PID1, PID2;
+  IIR2_COEFF IIR1, IIR2;
+  } CTRLLOOP_CH_CONFIG;
+
 
 typedef struct rpmsg_endpoint RPMSG_ENDP_TYPE;
 

@@ -290,7 +290,7 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
               rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(dacvalue))&0x0000FFFF;
               numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
               if(numbytes<rpmsglen)
-                snprintf(ans, maxlen, "%s: DACCH WRITE rpmsg_send() failed\n", SCPI_ERRS);
+                snprintf(ans, maxlen, "%s: DAC:CH WRITE rpmsg_send() failed\n", SCPI_ERRS);
               else
                 snprintf(ans, maxlen, "%s: DAC CH %d updated with value %d\n", SCPI_OKS, nch, dacvalue);
               }
@@ -298,6 +298,126 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
           else
             {
             snprintf(ans, maxlen, "%s: missing DAC value\n", SCPI_ERRS);
+            }
+          }
+        }
+      }
+    else
+      {
+      snprintf(ans, maxlen, "%s: missing DAC channel\n", SCPI_ERRS);
+      }
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_DACCHOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,offs;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request DAC channel offset
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_DACOFFS;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: DAC OFFS READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %d is the offset of DAC channel #%d\n", SCPI_OKS, gDAC_offs_cnt[nch-1], nch);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: DAC OFFS READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: DAC OFFS READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // parse the values of DAC channel offset;
+    // format is 16 bit 2's complement int, written in decimal
+
+    // next in line is the desired DAC channel
+    p=strtok(NULL," ");
+    if(p!=NULL)
+      {
+      nch=(int)strtol(p, NULL, 10);
+      if(errno!=0 && nch==0)
+        {
+        snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+        }
+      else
+        {
+        if((nch<1)||(nch>4))
+          {
+          snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+          }
+        else
+          {
+          // next in line is the DAC offset value
+          p=strtok(NULL," ");
+          if(p!=NULL)
+            {
+            offs=(int)strtol(p, NULL, 10);
+            if(errno!=0 && offs==0)
+              {
+              snprintf(ans, maxlen, "%s: invalid DAC offset\n", SCPI_ERRS);
+              }
+            else
+              {
+              // everything is ready: send rpmsg to R5
+              rpmsglen=sizeof(R5_RPMSG_TYPE);
+              rpmsg_ptr->command = RPMSGCMD_WRITE_DACOFFS;
+              rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
+              numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+              if(numbytes<rpmsglen)
+                snprintf(ans, maxlen, "%s: DAC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
+              else
+                snprintf(ans, maxlen, "%s: DAC CH %d has offset %d\n", SCPI_OKS, nch, offs);
+              }
+            }
+          else
+            {
+            snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
             }
           }
         }
@@ -558,8 +678,6 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         snprintf(ans, maxlen, "%s: WAVEGEN CH CONFIG READ error\n", SCPI_ERRS);
         break;
       }
-
-
     }
   else
     {
@@ -1205,10 +1323,13 @@ void printHelp(int filedes)
   sendback(filedes,"                                are actuated synchronously to next edge\n");
   sendback(filedes,"                                of the sampling clock\n");
   sendback(filedes,"DAC?                          : read back the value of all 4 DAC channels;\n");
-  sendback(filedes,"DACCH <nch> <val>             : write value <val> into DAC channel <nch>;\n");
+  sendback(filedes,"DAC:CH <nch> <val>            : write value <val> into DAC channel <nch>;\n");
   sendback(filedes,"                                <nch> is in range [1..4];\n");
   sendback(filedes,"                                <val> is a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
+  sendback(filedes,"DAC:CH:OFFSet <nch> <val>     : set/get the offset of DAC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
+  sendback(filedes,"                                in decimal notation;\n");
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
   sendback(filedes,"                                of the sampling clock\n");
@@ -1296,8 +1417,10 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_RST(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"DAC")==0)
     parse_DAC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"DACCH")==0)
+  else if(strcmp(p,"DAC:CH")==0)
     parse_DACCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"DAC:CH:OFFS")==0) || (strcmp(p,"DAC:CH:OFFSET")==0) )
+    parse_DACCHOFFS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"FSAMPL")==0)

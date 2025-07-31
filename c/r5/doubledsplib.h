@@ -16,36 +16,11 @@
 
 #include <math.h>
 #include <stdbool.h>
+// I need r5_main.h to have ARMR5 #defined
+#include "r5_main.h"
+#include "common.h"
 
 // ##########  types  #######################
-typedef struct
-  {
-  // user coeff
-  double a[3]; // x_i coeff
-  double b[2]; // y_i coeff
-  // internal "static" vars
-  double x[2]; // x pipeline
-  double y[2]; // y pipeline
-  } IIR2_COEFF;
-
-typedef struct
-  {
-  // user gains
-  double Gp;         // prop gain
-  double Gi;         // integr gain
-  double G1d;        // deriv gain #1
-  double G2d;        // deriv gain #2
-  double G_aiw;      // anti integral windup gain
-  double out_sat;    // output saturation limit
-  double in_thr;     // input dead band
-  bool deriv_on_PV;  // derivative on process variable?
-  bool invert_cmd;   // invert commanded value
-  bool invert_meas;  // invert measured value
-  // internal "static" vars
-  double xn1;        // x(n-1)
-  double yi_n1;      // integral part at previous step = y_I(n-1)
-  double yd_n1;      // derivative part at previous step = y_D(n-1)
-  } PID_GAINS;
 
 // ##########  extern globals  ################
 
