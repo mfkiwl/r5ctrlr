@@ -422,6 +422,8 @@ void InitVars(void)
 
     // control loop params
   
+    gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_DISABLED;
+
     for(j=0; j<5; j++)
       {
       gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
@@ -443,54 +445,33 @@ void InitVars(void)
     gCtrlLoopChanConfig[i].inputSelect=i;
     gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
   
-    gCtrlLoopChanConfig[i].PID1.Gp         =1.;
-    gCtrlLoopChanConfig[i].PID1.Gi         =0.;
-    gCtrlLoopChanConfig[i].PID1.G1d        =0.;
-    gCtrlLoopChanConfig[i].PID1.G2d        =0.;
-    gCtrlLoopChanConfig[i].PID1.G_aiw      =1.;
-    gCtrlLoopChanConfig[i].PID1.out_sat    =1.;
-    gCtrlLoopChanConfig[i].PID1.in_thr     =0.;
-    gCtrlLoopChanConfig[i].PID1.deriv_on_PV=false;
-    gCtrlLoopChanConfig[i].PID1.invert_cmd =false;
-    gCtrlLoopChanConfig[i].PID1.invert_meas=false;
-    gCtrlLoopChanConfig[i].PID1.xn1        =0.;
-    gCtrlLoopChanConfig[i].PID1.yi_n1      =0.;
-    gCtrlLoopChanConfig[i].PID1.yd_n1      =0.;
+    for(j=0; j<2; j++)
+      {
+      gCtrlLoopChanConfig[i].PID[j].Gp         =1.;
+      gCtrlLoopChanConfig[i].PID[j].Gi         =0.;
+      gCtrlLoopChanConfig[i].PID[j].G1d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G2d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G_aiw      =1.;
+      gCtrlLoopChanConfig[i].PID[j].out_sat    =1.;
+      gCtrlLoopChanConfig[i].PID[j].in_thr     =0.;
+      gCtrlLoopChanConfig[i].PID[j].deriv_on_PV=false;
+      gCtrlLoopChanConfig[i].PID[j].invert_cmd =false;
+      gCtrlLoopChanConfig[i].PID[j].invert_meas=false;
+      gCtrlLoopChanConfig[i].PID[j].xn1        =0.;
+      gCtrlLoopChanConfig[i].PID[j].yi_n1      =0.;
+      gCtrlLoopChanConfig[i].PID[j].yd_n1      =0.;
 
-    gCtrlLoopChanConfig[i].PID2.Gp         =1.;
-    gCtrlLoopChanConfig[i].PID2.Gi         =0.;
-    gCtrlLoopChanConfig[i].PID2.G1d        =0.;
-    gCtrlLoopChanConfig[i].PID2.G2d        =0.;
-    gCtrlLoopChanConfig[i].PID2.G_aiw      =1.;
-    gCtrlLoopChanConfig[i].PID2.out_sat    =1.;
-    gCtrlLoopChanConfig[i].PID2.in_thr     =0.;
-    gCtrlLoopChanConfig[i].PID2.deriv_on_PV=false;
-    gCtrlLoopChanConfig[i].PID2.invert_cmd =false;
-    gCtrlLoopChanConfig[i].PID2.invert_meas=false;
-    gCtrlLoopChanConfig[i].PID2.xn1        =0.;
-    gCtrlLoopChanConfig[i].PID2.yi_n1      =0.;
-    gCtrlLoopChanConfig[i].PID2.yd_n1      =0.;
+      gCtrlLoopChanConfig[i].IIR[j].a[0]  =1.;
+      gCtrlLoopChanConfig[i].IIR[j].a[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].a[2]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].x[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].x[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].y[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].y[1]  =0.;
+      }
     
-    gCtrlLoopChanConfig[i].IIR1.a[0]  =1.;
-    gCtrlLoopChanConfig[i].IIR1.a[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.a[2]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.b[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.b[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.x[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.x[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.y[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.y[1]  =0.;
-    
-    gCtrlLoopChanConfig[i].IIR2.a[0]  =1.;
-    gCtrlLoopChanConfig[i].IIR2.a[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.a[2]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.b[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.b[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.x[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.x[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.y[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.y[1]  =0.;
-
     }
   }
 

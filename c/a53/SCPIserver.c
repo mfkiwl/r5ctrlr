@@ -1327,6 +1327,139 @@ void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
 
 //-------------------------------------------------------------------
 
+void parse_CTRLLOOP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int onoff;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    snprintf(ans, maxlen, "%s: read operation not supported; use *STB? instead\n", SCPI_ERRS);
+    }
+  else
+    {
+    // turn control loop ON or OFF
+
+    // next in line is ON or OFF
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"ON")==0)
+      onoff=1;
+    else if(strcmp(p,"OFF")==0)
+      onoff=0;
+    else
+      onoff=-1;
+    
+    if(onoff<0)
+      {
+      snprintf(ans, maxlen, "%s: use ON/OFF with CTRLLOOP command\n", SCPI_ERRS);
+      return;
+      }
+    // send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_CTRLLOOP_ONOFF;
+    rpmsg_ptr->data[0]=(u32)onoff;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: CTRLLOOP WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: control loop switched %s\n", SCPI_OKS, onoff==1? "ON" : "OFF");
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
+void do_FilterReset(int filtertype, char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch, instance;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    snprintf(ans, maxlen, "%s: read operation not supported\n", SCPI_ERRS);
+    }
+  else
+    {
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = (filtertype==FILTERTYPE_PID) ? RPMSGCMD_RESET_PID : RPMSGCMD_RESET_IIR;
+    rpmsg_ptr->data[0]=(u32)nch;
+    rpmsg_ptr->data[1]=(u32)instance;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: FILTRESET WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_PIDRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  do_FilterReset(FILTERTYPE_PID,ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_IIRRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  do_FilterReset(FILTERTYPE_IIR,ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_TRIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -1671,7 +1804,9 @@ void printHelp(int filedes)
   sendback(filedes,"                                it will be approximated to the closest possible frequency;\n");
   sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
   sendback(filedes,"FSAMPL?                       : retrieve sampling frequency (1Hz precision)\n");
-  sendback(filedes,"WAVEGEN {OFF|ON}              : start/stop waveform generator mode\n");
+  sendback(filedes,"WAVEGEN {ON|OFF}              : global ON/OFF of waveform generator mode\n");
+  sendback(filedes,"                                each channel must be individually enabled/disabled by\n");
+  sendback(filedes,"                                the command WAVEGEN:CH:ENABLE\n");
   sendback(filedes,"WAVEGEN:CH:CONFIG <nch> {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
   sendback(filedes,"                              : configures channel <chan> of the waveform generator;\n");
   sendback(filedes,"                                notes:\n");
@@ -1690,6 +1825,15 @@ void printHelp(int filedes)
   sendback(filedes,"                              : enables/disables channel <nch> of the waveform generator;\n");
   sendback(filedes,"                                SINGLE can be used only in association with SWEEP;\n");
   sendback(filedes,"WAVEGEN:CH:ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
+  sendback(filedes,"CTRLLOOP {ON|OFF}             : global ON/OFF of control loop;\n");
+  sendback(filedes,"                                each channel must be individually enabled/disabled by\n");
+  sendback(filedes,"                                the command CTRLLOOP:CH:ENABLE\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:RESET <nch> <instance>\n");
+  sendback(filedes,"                              : reset memory of instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
+  sendback(filedes,"CTRLLOOP:CH:IIR:RESET <nch> <instance>\n");
+  sendback(filedes,"                              : reset memory of instance <instance> (in range [1..2]) of IIR\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -1771,6 +1915,12 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN:CH:ENABLE")==0)
     parse_WAVEGEN_CH_ENABLE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"CTRLLOOP")==0)
+    parse_CTRLLOOP(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"CTRLLOOP:CH:PID:RESET")==0)
+    parse_PIDRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"CTRLLOOP:CH:IIR:RESET")==0)
+    parse_IIRRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )

@@ -356,6 +356,59 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         gWavegenEnable=true;
       break;
 
+    // start or stop CONTROL LOOP
+    case RPMSGCMD_CTRLLOOP_ONOFF:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      
+      // reset filters inside control loop
+      for(i=0; i<4; i++)
+        {
+        ResetPID(i,0);
+        ResetPID(i,1);
+        ResetIIR(i,0);
+        ResetIIR(i,1);
+        }
+      
+      if(d==0)
+        gCtrlLoopEnable=false;
+      else
+        gCtrlLoopEnable=true;
+      break;
+
+    // reset PID
+    case RPMSGCMD_RESET_PID:
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_RESET_PID chan index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_RESET_PID instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      ResetPID(nch-1,d-1);
+      break;
+
+    // reset IIR
+    case RPMSGCMD_RESET_IIR:
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_RESET_IIR chan index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_RESET_IIR instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      ResetIIR(nch-1,d-1);
+      break;
+
     // send current state
     case RPMSGCMD_READ_STATE:
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_STATE;
@@ -1179,6 +1232,27 @@ void AddTimeToTable(int theindex, double thetime)
 
 // -----------------------------------------------------------
 
+void ResetPID(int chan, int instance)
+  {
+  gCtrlLoopChanConfig[chan].PID[instance].xn1        =0.;
+  gCtrlLoopChanConfig[chan].PID[instance].yi_n1      =0.;
+  gCtrlLoopChanConfig[chan].PID[instance].yd_n1      =0.;
+  }
+
+
+// -----------------------------------------------------------
+
+void ResetIIR(int chan, int instance)
+  {
+  gCtrlLoopChanConfig[chan].IIR[instance].x[0]  =0.;
+  gCtrlLoopChanConfig[chan].IIR[instance].x[1]  =0.;
+  gCtrlLoopChanConfig[chan].IIR[instance].y[0]  =0.;
+  gCtrlLoopChanConfig[chan].IIR[instance].y[1]  =0.;
+  }
+
+
+// -----------------------------------------------------------
+
 void InitVars(void)
   {
   int i,j;
@@ -1187,6 +1261,7 @@ void InitVars(void)
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
   gWavegenEnable=false;
+  //gCtrlLoopEnable=false;
   gCtrlLoopEnable=true;  // change me
   gRecorderConfig.state=RECORDER_IDLE;
   gRecorderConfig.trig_chan=1;
@@ -1215,6 +1290,9 @@ void InitVars(void)
     gWavegenChanConfig[i].dt     = 1.;
 
     // control loop params
+
+    //gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_DISABLED;
+    gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_ENABLED;  // change me
   
     for(j=0; j<5; j++)
       {
@@ -1239,53 +1317,30 @@ void InitVars(void)
     //gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
     gDAC_outputSelect[i]=OUTPUT_SELECT_CTRLR;  // change me
   
-    gCtrlLoopChanConfig[i].PID1.Gp         =1.;
-    gCtrlLoopChanConfig[i].PID1.Gi         =0.;
-    gCtrlLoopChanConfig[i].PID1.G1d        =0.;
-    gCtrlLoopChanConfig[i].PID1.G2d        =0.;
-    gCtrlLoopChanConfig[i].PID1.G_aiw      =1.;
-    gCtrlLoopChanConfig[i].PID1.out_sat    =1.;
-    gCtrlLoopChanConfig[i].PID1.in_thr     =0.;
-    gCtrlLoopChanConfig[i].PID1.deriv_on_PV=false;
-    gCtrlLoopChanConfig[i].PID1.invert_cmd =false;
-    gCtrlLoopChanConfig[i].PID1.invert_meas=false;
-    gCtrlLoopChanConfig[i].PID1.xn1        =0.;
-    gCtrlLoopChanConfig[i].PID1.yi_n1      =0.;
-    gCtrlLoopChanConfig[i].PID1.yd_n1      =0.;
-  
-    gCtrlLoopChanConfig[i].PID2.Gp         =1.;
-    gCtrlLoopChanConfig[i].PID2.Gi         =0.;
-    gCtrlLoopChanConfig[i].PID2.G1d        =0.;
-    gCtrlLoopChanConfig[i].PID2.G2d        =0.;
-    gCtrlLoopChanConfig[i].PID2.G_aiw      =1.;
-    gCtrlLoopChanConfig[i].PID2.out_sat    =1.;
-    gCtrlLoopChanConfig[i].PID2.in_thr     =0.;
-    gCtrlLoopChanConfig[i].PID2.deriv_on_PV=false;
-    gCtrlLoopChanConfig[i].PID2.invert_cmd =false;
-    gCtrlLoopChanConfig[i].PID2.invert_meas=false;
-    gCtrlLoopChanConfig[i].PID2.xn1        =0.;
-    gCtrlLoopChanConfig[i].PID2.yi_n1      =0.;
-    gCtrlLoopChanConfig[i].PID2.yd_n1      =0.;
+    for(j=0; j<2; j++)
+      {
+      gCtrlLoopChanConfig[i].PID[j].Gp         =1.;
+      gCtrlLoopChanConfig[i].PID[j].Gi         =0.;
+      gCtrlLoopChanConfig[i].PID[j].G1d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G2d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G_aiw      =1.;
+      gCtrlLoopChanConfig[i].PID[j].out_sat    =1.;
+      gCtrlLoopChanConfig[i].PID[j].in_thr     =0.;
+      gCtrlLoopChanConfig[i].PID[j].deriv_on_PV=false;
+      gCtrlLoopChanConfig[i].PID[j].invert_cmd =false;
+      gCtrlLoopChanConfig[i].PID[j].invert_meas=false;
+
+      ResetPID(i,j);
     
-    gCtrlLoopChanConfig[i].IIR1.a[0]  =1.;
-    gCtrlLoopChanConfig[i].IIR1.a[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.a[2]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.b[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.b[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.x[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.x[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.y[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR1.y[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].a[0]  =1.;
+      gCtrlLoopChanConfig[i].IIR[j].a[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].a[2]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[1]  =0.;
     
-    gCtrlLoopChanConfig[i].IIR2.a[0]  =1.;
-    gCtrlLoopChanConfig[i].IIR2.a[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.a[2]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.b[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.b[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.x[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.x[1]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.y[0]  =0.;
-    gCtrlLoopChanConfig[i].IIR2.y[1]  =0.;
+      ResetIIR(i,j);
+      }
+
     }
 
 
@@ -1536,19 +1591,26 @@ int main()
         // calculate loop channels first
         for(i=0; i<4; i++)
           {
-          // input selector: 
-          //  if 0 to 3, then use that channel of the waveform generator;
-          //  if 4, then use ADC via the appropriate MISO (multiple input single output) matrix
-          if(gCtrlLoopChanConfig[i].inputSelect >=4)
-            cmd=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_C, gCtrlLoopChanConfig[i].input_MISO_D, 4);
+          if(gCtrlLoopChanConfig[i].state == CTRLLOOP_CH_ENABLED)
+            {
+            // input selector: 
+            //  if 0 to 3, then use that channel of the waveform generator;
+            //  if 4, then use ADC via the appropriate MISO (multiple input single output) matrix
+            if(gCtrlLoopChanConfig[i].inputSelect >=4)
+              cmd=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_C, gCtrlLoopChanConfig[i].input_MISO_D, 4);
+            else
+              cmd=g_y[gCtrlLoopChanConfig[i].inputSelect];
+            
+            loopvar[i]=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_A, gCtrlLoopChanConfig[i].input_MISO_B, 4);
+            loopvar[i]=PID(cmd,loopvar[i],&(gCtrlLoopChanConfig[i].PID[0]));
+            loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR[0]));
+            loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR[1]));
+            loopvar[i]=PID(loopvar[i],0.,&(gCtrlLoopChanConfig[i].PID[1]));
+            }
           else
-            cmd=g_y[gCtrlLoopChanConfig[i].inputSelect];
-          
-          loopvar[i]=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_A, gCtrlLoopChanConfig[i].input_MISO_B, 4);
-          loopvar[i]=PID(cmd,loopvar[i],&(gCtrlLoopChanConfig[i].PID1));
-          loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR1));
-          loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR2));
-          loopvar[i]=PID(loopvar[i],0.,&(gCtrlLoopChanConfig[i].PID2));
+            {
+            loopvar[i]=0.;
+            }
           }
         
         // now calculate output channels

@@ -69,6 +69,9 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_ADCGAIN       23
 #define RPMSGCMD_WRITE_DACOUTSEL    24
 #define RPMSGCMD_READ_DACOUTSEL     25
+#define RPMSGCMD_CTRLLOOP_ONOFF     26
+#define RPMSGCMD_RESET_PID          27
+#define RPMSGCMD_RESET_IIR          28
 
 // R5 application state
 #define R5CTRLR_IDLE     0
@@ -96,6 +99,10 @@ typedef    int16_t s16;
 #define WGEN_CH_TYPE_SINE        1
 #define WGEN_CH_TYPE_SWEEP       2
 
+// control loop
+#define CTRLLOOP_CH_DISABLED 0
+#define CTRLLOOP_CH_ENABLED  1
+
 // DAC output select
 #define OUTPUT_SELECT_WGEN   0
 #define OUTPUT_SELECT_CTRLR  1
@@ -120,12 +127,13 @@ typedef struct
 
 typedef struct
   {
+  int state;  //ENABLED/DISABLED
   int inputSelect;
   double input_MISO_A[5], input_MISO_B[5],
          input_MISO_C[5], input_MISO_D[5],
          output_MISO_E[5], output_MISO_F[5];
-  PID_GAINS  PID1, PID2;
-  IIR2_COEFF IIR1, IIR2;
+  PID_GAINS  PID[2];
+  IIR2_COEFF IIR[2];
   } CTRLLOOP_CH_CONFIG;
 
 

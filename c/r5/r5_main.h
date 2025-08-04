@@ -119,6 +119,8 @@ void SetupExceptions(void);
 static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index);
 void ResetTimeTable(void);
 void AddTimeToTable(int theindex, double thetime);
+void ResetPID(int chan, int instance);
+void ResetIIR(int chan, int instance);
 void InitVars(void);
 int main(void);
 
