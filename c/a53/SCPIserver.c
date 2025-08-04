@@ -410,6 +410,132 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
 //-------------------------------------------------------------------
 
+void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,slctor;
+  int numbytes, rpmsglen, status;
+  char enblstr[16];
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ DAC output selector state (control loop/wave generator)
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_DACOUTSEL;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: DAC OUT SEL READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        if(gDAC_outputSelect[nch-1]==OUTPUT_SELECT_CTRLR)
+          strcpy(enblstr,"CTRLLOOP");
+        else
+          strcpy(enblstr,"WAVEGEN");
+        snprintf(ans, maxlen, "%s: %s\n", SCPI_OKS, enblstr);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: DAC OUT SEL READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: DAC OUT SEL READ error\n", SCPI_ERRS);
+        break;
+      }
+
+    }
+  else
+    {
+    // WRITE DAC output selector state (control loop/wave generator)
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the selector (WAVEGEN/CTRLLOOP)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing WAVEGEN/CTRLLOOP option\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"WAVEGEN")==0)
+      slctor=OUTPUT_SELECT_WGEN;
+    else if(strcmp(p,"CTRLLOOP")==0)
+      slctor=OUTPUT_SELECT_CTRLR;
+    else
+      slctor=-1;
+    
+    if(slctor<0)
+      {
+      snprintf(ans, maxlen, "%s: use WAVEGEN/CTRLLOOP for DAC out selection\n", SCPI_ERRS);
+      return;
+      }
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_DACOUTSEL;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(slctor);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: DAC OUT SEL WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: DAC OUT driver updated\n", SCPI_OKS, nch, p);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   int n,nch, adc[4];
@@ -1529,6 +1655,10 @@ void printHelp(int filedes)
   sendback(filedes,"DAC:CH:OFFSet <nch> <val>     : set/get the offset of DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
+  sendback(filedes,"DAC:CH:OUT_SELECT <nch> {WAVEGEN|CTRLLOOP}\n");
+  sendback(filedes,"                              : set the driver of DAC channel <nch> (in range [1..4])\n");
+  sendback(filedes,"DAC:CH:OUT_SELECT?  <nch>     : get the driver of DAC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                answer is {WAVEGEN|CTRLLOOP}\n");
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
   sendback(filedes,"                                of the sampling clock\n");
@@ -1625,6 +1755,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_DACCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"DAC:CH:OFFS")==0) || (strcmp(p,"DAC:CH:OFFSET")==0) )
     parse_DACOFFS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"DAC:CH:OUT_SELECT")==0)
+    parse_DAC_OUT_SELECT(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"ADC:CH:OFFS")==0) || (strcmp(p,"ADC:CH:OFFSET")==0) )

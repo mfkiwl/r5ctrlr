@@ -129,6 +129,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       gDAC_offs_cnt[nch-1] = (s16)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
+    // readback DAC output selection
+    case RPMSGCMD_READ_DACOUTSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      gDAC_outputSelect[nch-1] = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
     // readback ADC values sent by R5
     case RPMSGCMD_READ_ADC:
       d=((R5_RPMSG_TYPE*)data)->data[0];

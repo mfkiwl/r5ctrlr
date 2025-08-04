@@ -211,6 +211,40 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
 
+    // select DAC driver
+    case RPMSGCMD_WRITE_DACOUTSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACOUTSEL index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      gDAC_outputSelect[nch-1]   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+    
+    // read back DAC out selection
+    case RPMSGCMD_READ_DACOUTSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_DACOUTSEL index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOUTSEL;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gDAC_outputSelect[nch-1]);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("DAC OUT SEL READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
     // update ADC channel offset with the value requested by linux
     case RPMSGCMD_WRITE_ADCOFFS:
       d=((R5_RPMSG_TYPE*)data)->data[0];
