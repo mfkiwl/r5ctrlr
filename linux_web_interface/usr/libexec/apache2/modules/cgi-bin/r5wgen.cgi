@@ -74,7 +74,7 @@ else:
 ch_conf=[dict() for ch in range(4)]
 
 for ch in range(4):
-  qstr='WAVEGEN:CH_ENABLE? '+str(ch+1)+'\n'
+  qstr='WAVEGEN:CH:ENABLE? '+str(ch+1)+'\n'
   s.sendall(bytes(qstr,encoding='ascii')) 
   ans=(s.recv(1024)).decode("utf-8")
   tok=ans.split(" ",2)
@@ -83,7 +83,7 @@ for ch in range(4):
   else:
     ch_conf[ch]['en']='OFF'
 
-  qstr='WAVEGEN:CH_CONFIG? '+str(ch+1)
+  qstr='WAVEGEN:CH:CONFIG? '+str(ch+1)
   s.sendall(bytes(qstr,encoding='ascii')) 
   ans=(s.recv(1024)).decode("utf-8")
   tok=ans.split(" ",7)
@@ -160,7 +160,7 @@ for name in arguments.keys():
     else:
       the_state='OFF'
     ch_conf[the_chan-1]['en']=the_state
-    cmd_s='WAVEGEN:CH_ENABLE '+str(the_chan)+' '+the_state+'\n'
+    cmd_s='WAVEGEN:CH:ENABLE '+str(the_chan)+' '+the_state+'\n'
     #print(f'<br> >>>>> {cmd_s} <<<<< <br>')
     s.sendall(cmd_s.encode('ascii')) 
     ans=(s.recv(1024)).decode('utf-8')
@@ -220,7 +220,7 @@ for name in arguments.keys():
 # ---------  now write back the updated channel config to the R5  ------------
 
 for ch in range(4):
-  qstr='WAVEGEN:CH_CONFIG '+str(ch+1)+' '                \
+  qstr='WAVEGEN:CH:CONFIG '+str(ch+1)+' '                \
                            +ch_conf[ch]['type']+' '      \
                            +str(ch_conf[ch]['ampl'])+' ' \
                            +str(ch_conf[ch]['offs'])+' ' \

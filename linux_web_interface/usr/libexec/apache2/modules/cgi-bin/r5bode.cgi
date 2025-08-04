@@ -227,7 +227,7 @@ elif acq_state==ACQ_START :
   # print(datetime.now())
   # print(' : configuring...')
 
-  cmd_s='WAVEGEN:CH_ENABLE '+str(sweep_ch)+' OFF\n'
+  cmd_s='WAVEGEN:CH:ENABLE '+str(sweep_ch)+' OFF\n'
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
   tok=ans.split(" ",2)
@@ -235,7 +235,7 @@ elif acq_state==ACQ_START :
     print('<br>Error programming the waveform generator (step 1)<br>')
 
   # by default sweep is done at 80% full scale, no offset
-  cmd_s='WAVEGEN:CH_CONFIG '+str(sweep_ch)+' SWEEP 0.8 0 '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
+  cmd_s='WAVEGEN:CH:CONFIG '+str(sweep_ch)+' SWEEP 0.8 0 '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
   # print('<br>'+cmd_s+'<br>')
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
@@ -264,7 +264,7 @@ elif acq_state==ACQ_START :
   if tok[0].strip()=='ERR:':
     print('<br>Error programming the waveform generator (step 5)<br>')
 
-  cmd_s='WAVEGEN:CH_ENABLE '+str(sweep_ch)+' SINGLE\n'
+  cmd_s='WAVEGEN:CH:ENABLE '+str(sweep_ch)+' SINGLE\n'
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
   tok=ans.split(" ",2)

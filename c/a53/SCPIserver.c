@@ -105,24 +105,24 @@ void parse_STB(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
     rpmsg_ptr->command = RPMSGCMD_READ_STATE;
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: STB READ rpmsg_send() failed\n", SCPI_ERRS);
-    else
       {
-      // now wait for answer
-      status=WaitForRpmsg();
-      switch(status)
-        {
-        case RPMSG_ANSWER_VALID:
-          // print current state
-          snprintf(ans, maxlen, "%s: %d is the status word\n", SCPI_OKS, gR5ctrlState);
-          break;
-        case RPMSG_ANSWER_TIMEOUT:
-          snprintf(ans, maxlen, "%s: STATUS READ timed out\n", SCPI_ERRS);
-          break;
-        case RPMSG_ANSWER_ERR:
-          snprintf(ans, maxlen, "%s: STATUS READ error\n", SCPI_ERRS);
-          break;
-        }
+      snprintf(ans, maxlen, "%s: STB READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        // print current state
+        snprintf(ans, maxlen, "%s: %d is the status word\n", SCPI_OKS, gR5ctrlState);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: STATUS READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: STATUS READ error\n", SCPI_ERRS);
+        break;
       }
     }
   else
@@ -166,6 +166,8 @@ void parse_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
   
   if(rw==SCPI_READ)
     {
+    // READ
+
     // remove stale rpmsgs from queue
     FlushRpmsg();
 
@@ -173,67 +175,61 @@ void parse_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
     rpmsg_ptr->command = RPMSGCMD_READ_DAC;
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: DAC READBACK rpmsg_send() failed\n", SCPI_ERRS);
-    else
       {
-      // now wait for answer
-      status=WaitForRpmsg();
-      switch(status)
-        {
-        case RPMSG_ANSWER_VALID:
-          snprintf(ans, maxlen, "%s: %d %d %d %d\n", SCPI_OKS, g_dacval[0], g_dacval[1], g_dacval[2], g_dacval[3]);
-          break;
-        case RPMSG_ANSWER_TIMEOUT:
-          snprintf(ans, maxlen, "%s: DAC READBACK timed out\n", SCPI_ERRS);
-          break;
-        case RPMSG_ANSWER_ERR:
-          snprintf(ans, maxlen, "%s: DAC READBACK error\n", SCPI_ERRS);
-          break;
-        }
+      snprintf(ans, maxlen, "%s: DAC READBACK rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %d %d %d %d\n", SCPI_OKS, g_dacval[0], g_dacval[1], g_dacval[2], g_dacval[3]);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: DAC READBACK timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: DAC READBACK error\n", SCPI_ERRS);
+        break;
       }
     }
   else
     {
+    // WRITE
+
     // parse the values to write into the 4 DAC channels;
     // format is 16 bit 2's complement int, written in decimal
-    nch=0;
-    do
+    for(nch=0; nch<4; nch++)
       {
       // next in line is the desired value for nex DAC channel
       p=strtok(NULL," ");
-      if(p!=NULL)
+      if(p==NULL)
+        break;
+      n=(int)strtol(p, NULL, 10);
+      if(errno!=0 && n==0)
         {
-        n=(int)strtol(p, NULL, 10);
-        if(errno!=0 && n==0)
-          {
-          snprintf(ans, maxlen, "%s: invalid DAC value\n", SCPI_ERRS);
-          p=NULL;     // to break out of do..while cycle
-          }
-        else
-          {
-          dac[nch++]=n;
-          }
-        }      
-      } 
-    while((p!=NULL) && (nch<4));
+        snprintf(ans, maxlen, "%s: invalid DAC value\n", SCPI_ERRS);
+        break;
+        }
+      dac[nch]=n;
+      }
 
     // now send the new values to R5
-    if((p!=NULL) && (nch=4))
-      {
-      rpmsglen=sizeof(R5_RPMSG_TYPE);
-      rpmsg_ptr->command = RPMSGCMD_WRITE_DAC;
-      rpmsg_ptr->data[0]=((u32)(dac[1])<<16)&0xFFFF0000 | ((u32)(dac[0]))&0x0000FFFF;
-      rpmsg_ptr->data[1]=((u32)(dac[3])<<16)&0xFFFF0000 | ((u32)(dac[2]))&0x0000FFFF;
-      numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-      if(numbytes<rpmsglen)
-        snprintf(ans, maxlen, "%s: DAC WRITE rpmsg_send() failed\n", SCPI_ERRS);
-      else
-        snprintf(ans, maxlen, "%s: DAC updated (%d %d %d %d)\n", SCPI_OKS, dac[0], dac[1], dac[2], dac[3]);
-      }
-    else
+    if((p==NULL) || (nch!=4))
       {
       snprintf(ans, maxlen, "%s: missing DAC channel value\n", SCPI_ERRS);
+      return;
       }
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_DAC;
+    rpmsg_ptr->data[0]=((u32)(dac[1])<<16)&0xFFFF0000 | ((u32)(dac[0]))&0x0000FFFF;
+    rpmsg_ptr->data[1]=((u32)(dac[3])<<16)&0xFFFF0000 | ((u32)(dac[2]))&0x0000FFFF;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: DAC WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: DAC updated (%d %d %d %d)\n", SCPI_OKS, dac[0], dac[1], dac[2], dac[3]);
     }
   }
 
@@ -258,54 +254,44 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
 
     // next in line is the desired DAC channel
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      nch=(int)strtol(p, NULL, 10);
-      if(errno!=0 && nch==0)
-        {
-        snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
-        }
-      else
-        {
-        if((nch<1)||(nch>4))
-          {
-          snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
-          }
-        else
-          {
-          // next in line is the DAC value
-          p=strtok(NULL," ");
-          if(p!=NULL)
-            {
-            dacvalue=(int)strtol(p, NULL, 10);
-            if(errno!=0 && dacvalue==0)
-              {
-              snprintf(ans, maxlen, "%s: invalid DAC value\n", SCPI_ERRS);
-              }
-            else
-              {
-              // everything is ready: send rpmsg to R5
-              rpmsglen=sizeof(R5_RPMSG_TYPE);
-              rpmsg_ptr->command = RPMSGCMD_WRITE_DACCH;
-              rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(dacvalue))&0x0000FFFF;
-              numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-              if(numbytes<rpmsglen)
-                snprintf(ans, maxlen, "%s: DAC:CH WRITE rpmsg_send() failed\n", SCPI_ERRS);
-              else
-                snprintf(ans, maxlen, "%s: DAC CH %d updated with value %d\n", SCPI_OKS, nch, dacvalue);
-              }
-            }
-          else
-            {
-            snprintf(ans, maxlen, "%s: missing DAC value\n", SCPI_ERRS);
-            }
-          }
-        }
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing DAC channel\n", SCPI_ERRS);
+      return;
       }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+    // next in line is the DAC value
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing DAC value\n", SCPI_ERRS);
+      return;
+      }
+    dacvalue=(int)strtol(p, NULL, 10);
+    if(errno!=0 && dacvalue==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC value\n", SCPI_ERRS);
+      return;
+      }
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_DACCH;
+    rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(dacvalue))&0x0000FFFF;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: DAC:CH WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: DAC CH %d updated with value %d\n", SCPI_OKS, nch, dacvalue);
     }
   }
 
@@ -380,54 +366,44 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
     // next in line is the desired DAC channel
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      nch=(int)strtol(p, NULL, 10);
-      if(errno!=0 && nch==0)
-        {
-        snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
-        }
-      else
-        {
-        if((nch<1)||(nch>4))
-          {
-          snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
-          }
-        else
-          {
-          // next in line is the DAC offset value
-          p=strtok(NULL," ");
-          if(p!=NULL)
-            {
-            offs=(int)strtol(p, NULL, 10);
-            if(errno!=0 && offs==0)
-              {
-              snprintf(ans, maxlen, "%s: invalid DAC offset\n", SCPI_ERRS);
-              }
-            else
-              {
-              // everything is ready: send rpmsg to R5
-              rpmsglen=sizeof(R5_RPMSG_TYPE);
-              rpmsg_ptr->command = RPMSGCMD_WRITE_DACOFFS;
-              rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
-              numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-              if(numbytes<rpmsglen)
-                snprintf(ans, maxlen, "%s: DAC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
-              else
-                snprintf(ans, maxlen, "%s: DAC CH %d has offset %d\n", SCPI_OKS, nch, offs);
-              }
-            }
-          else
-            {
-            snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
-            }
-          }
-        }
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing DAC channel\n", SCPI_ERRS);
+      return;
       }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: DAC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+    // next in line is the DAC offset value
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
+      return;
+      }
+    offs=(int)strtol(p, NULL, 10);
+    if(errno!=0 && offs==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid DAC offset\n", SCPI_ERRS);
+      return;
+      }
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_DACOFFS;
+    rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: DAC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: DAC CH %d has offset %d\n", SCPI_OKS, nch, offs);
     }
   }
 
@@ -449,23 +425,23 @@ void parse_READ_ADC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
     rpmsg_ptr->command = RPMSGCMD_READ_ADC;
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: ADC READ rpmsg_send() failed\n", SCPI_ERRS);
-    else
       {
-      // now wait for answer
-      status=WaitForRpmsg();
-      switch(status)
-        {
-        case RPMSG_ANSWER_VALID:
-          snprintf(ans, maxlen, "%s: %d %d %d %d\n", SCPI_OKS, g_adcval[0], g_adcval[1], g_adcval[2], g_adcval[3]);
-          break;
-        case RPMSG_ANSWER_TIMEOUT:
-          snprintf(ans, maxlen, "%s: ADC READ timed out\n", SCPI_ERRS);
-          break;
-        case RPMSG_ANSWER_ERR:
-          snprintf(ans, maxlen, "%s: ADC READ error\n", SCPI_ERRS);
-          break;
-        }
+      snprintf(ans, maxlen, "%s: ADC READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %d %d %d %d\n", SCPI_OKS, g_adcval[0], g_adcval[1], g_adcval[2], g_adcval[3]);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: ADC READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: ADC READ error\n", SCPI_ERRS);
+        break;
       }
     }
   else
@@ -545,54 +521,44 @@ void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
     // next in line is the desired ADC channel
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      nch=(int)strtol(p, NULL, 10);
-      if(errno!=0 && nch==0)
-        {
-        snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
-        }
-      else
-        {
-        if((nch<1)||(nch>4))
-          {
-          snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
-          }
-        else
-          {
-          // next in line is the ADC offset value
-          p=strtok(NULL," ");
-          if(p!=NULL)
-            {
-            offs=(int)strtol(p, NULL, 10);
-            if(errno!=0 && offs==0)
-              {
-              snprintf(ans, maxlen, "%s: invalid ADC offset\n", SCPI_ERRS);
-              }
-            else
-              {
-              // everything is ready: send rpmsg to R5
-              rpmsglen=sizeof(R5_RPMSG_TYPE);
-              rpmsg_ptr->command = RPMSGCMD_WRITE_ADCOFFS;
-              rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
-              numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-              if(numbytes<rpmsglen)
-                snprintf(ans, maxlen, "%s: ADC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
-              else
-                snprintf(ans, maxlen, "%s: ADC CH %d has offset %d\n", SCPI_OKS, nch, offs);
-              }
-            }
-          else
-            {
-            snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
-            }
-          }
-        }
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing ADC channel\n", SCPI_ERRS);
+      return;
       }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+    // next in line is the ADC offset value
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
+      return;
+      }
+    offs=(int)strtol(p, NULL, 10);
+    if(errno!=0 && offs==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid ADC offset\n", SCPI_ERRS);
+      return;
+      }
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_ADCOFFS;
+    rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: ADC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: ADC CH %d has offset %d\n", SCPI_OKS, nch, offs);
     }
   }
 
@@ -667,55 +633,47 @@ void parse_ADCGAIN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
     // next in line is the desired ADC channel
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      nch=(int)strtol(p, NULL, 10);
-      if(errno!=0 && nch==0)
-        {
-        snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
-        }
-      else
-        {
-        if((nch<1)||(nch>4))
-          {
-          snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
-          }
-        else
-          {
-          // next in line is the ADC gain value (float)
-          p=strtok(NULL," ");
-          if(p!=NULL)
-            {
-            g=strtof(p, NULL);
-            // error check with float does not work
-            // if(errno!=0 && errno!=EIO && g==0.0F)
-            //   {
-            //   snprintf(ans, maxlen, "%s: invalid ADC gain\n", SCPI_ERRS);
-            //   return;
-            //   }
-            // everything is ready: send rpmsg to R5
-            rpmsglen=sizeof(R5_RPMSG_TYPE);
-            rpmsg_ptr->command = RPMSGCMD_WRITE_ADCGAIN;
-            rpmsg_ptr->data[0] = (u32)(nch);
-            // write floating point values directly as float (32 bit)
-            memcpy(&(rpmsg_ptr->data[1]), &g, sizeof(u32));
-            numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-            if(numbytes<rpmsglen)
-              snprintf(ans, maxlen, "%s: ADC:CH:GAIN WRITE rpmsg_send() failed\n", SCPI_ERRS);
-            else
-              snprintf(ans, maxlen, "%s: ADC CH %d has gain %f\n", SCPI_OKS, nch, g);
-            }
-          else
-            {
-            snprintf(ans, maxlen, "%s: missing GAIN value\n", SCPI_ERRS);
-            }
-          }
-        }
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing ADC channel\n", SCPI_ERRS);
+      return;
       }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid ADC channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: ADC channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+    // next in line is the ADC gain value (float)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing GAIN value\n", SCPI_ERRS);
+      return;
+      }
+    g=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && g==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid ADC gain\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_ADCGAIN;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[1]), &g, sizeof(u32));
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: ADC:CH:GAIN WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: ADC CH %d has gain %f\n", SCPI_OKS, nch, g);
     }
   }
 
@@ -731,6 +689,7 @@ void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R
   
   if(rw==SCPI_READ)
     {
+    // READ
     // remove stale rpmsgs from queue
     FlushRpmsg();
 
@@ -738,53 +697,50 @@ void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R
     rpmsg_ptr->command = RPMSGCMD_READ_FSAMPL;
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: FSAMPL READ rpmsg_send() failed\n", SCPI_ERRS);
-    else
       {
-      // now wait for answer
-      status=WaitForRpmsg();
-      switch(status)
-        {
-        case RPMSG_ANSWER_VALID:
-          snprintf(ans, maxlen, "%s: %d Hz\n", SCPI_OKS, gFsampl);
-          break;
-        case RPMSG_ANSWER_TIMEOUT:
-          snprintf(ans, maxlen, "%s: FSAMPL READ timed out\n", SCPI_ERRS);
-          break;
-        case RPMSG_ANSWER_ERR:
-          snprintf(ans, maxlen, "%s: FSAMPL READ error\n", SCPI_ERRS);
-          break;
-        }
+      snprintf(ans, maxlen, "%s: FSAMPL READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %d Hz\n", SCPI_OKS, gFsampl);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: FSAMPL READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: FSAMPL READ error\n", SCPI_ERRS);
+        break;
       }
     }
   else
     {
+    // WRITE
     // parse the desired sampling frequency in Hz
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      fs=(u32)strtol(p, NULL, 10);
-      if(errno!=0 && fs==0)
-        {
-        snprintf(ans, maxlen, "%s: invalid sampling frequency\n", SCPI_ERRS);
-        }
-      else
-        {
-        // send rpmsg to R5
-        rpmsglen=sizeof(R5_RPMSG_TYPE);
-        rpmsg_ptr->command = RPMSGCMD_WRITE_FSAMPL;
-        rpmsg_ptr->data[0]=fs;
-        numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-        if(numbytes<rpmsglen)
-          snprintf(ans, maxlen, "%s: FSAMPL WRITE rpmsg_send() failed\n", SCPI_ERRS);
-        else
-          snprintf(ans, maxlen, "%s: requested %d Hz sampling frequency\n", SCPI_OKS, fs);
-        }
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing sampling frequency\n", SCPI_ERRS);
+      return;
       }
+    fs=(u32)strtol(p, NULL, 10);
+    if(errno!=0 && fs==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid sampling frequency\n", SCPI_ERRS);
+      return;
+      }
+    // send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_FSAMPL;
+    rpmsg_ptr->data[0]=fs;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: FSAMPL WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: requested %d Hz sampling frequency\n", SCPI_OKS, fs);
     }
   }
 
@@ -808,36 +764,32 @@ void parse_WAVEGEN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 
     // next in line is ON or OFF
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      if(strcmp(p,"ON")==0)
-        onoff=1;
-      else if(strcmp(p,"OFF")==0)
-        onoff=0;
-      else
-        onoff=-1;
-      
-      if(onoff>=0)
-        {
-        // send rpmsg to R5
-        rpmsglen=sizeof(R5_RPMSG_TYPE);
-        rpmsg_ptr->command = RPMSGCMD_WGEN_ONOFF;
-        rpmsg_ptr->data[0]=(u32)onoff;
-        numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-        if(numbytes<rpmsglen)
-          snprintf(ans, maxlen, "%s: WAVEGEN WRITE rpmsg_send() failed\n", SCPI_ERRS);
-        else
-          snprintf(ans, maxlen, "%s: WAVEFORM GENERATOR switched %s\n", SCPI_OKS, onoff==1? "ON" : "OFF");
-        }
-      else
-        {
-        snprintf(ans, maxlen, "%s: use ON/OFF with WAVEGEN command\n", SCPI_ERRS);
-        }        
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
+      return;
       }
+    if(strcmp(p,"ON")==0)
+      onoff=1;
+    else if(strcmp(p,"OFF")==0)
+      onoff=0;
+    else
+      onoff=-1;
+    
+    if(onoff<0)
+      {
+      snprintf(ans, maxlen, "%s: use ON/OFF with WAVEGEN command\n", SCPI_ERRS);
+      return;
+      }
+    // send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WGEN_ONOFF;
+    rpmsg_ptr->data[0]=(u32)onoff;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: WAVEGEN WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: WAVEFORM GENERATOR switched %s\n", SCPI_OKS, onoff==1? "ON" : "OFF");
     }
   }
 
@@ -1258,6 +1210,8 @@ void parse_TRIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_
   
   if(rw==SCPI_READ)
     {
+    // READ
+
     // remove stale rpmsgs from queue
     FlushRpmsg();
 
@@ -1265,76 +1219,74 @@ void parse_TRIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_
     rpmsg_ptr->command = RPMSGCMD_READ_TRIG;
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: TRIG READ rpmsg_send() failed\n", SCPI_ERRS);
-    else
       {
-      // now wait for answer
-      status=WaitForRpmsg();
-      switch(status)
-        {
-        case RPMSG_ANSWER_VALID:
-          // print current state
-          switch(gRecorderConfig.state)
-            {
-            case RECORDER_IDLE:
-              snprintf(ans, maxlen, "%s: IDLE is recorder state\n", SCPI_OKS);
-              break;
-            case RECORDER_FORCE:
-            case RECORDER_ARMED:
-              snprintf(ans, maxlen, "%s: ARMED is recorder state\n", SCPI_OKS);
-              break;
-            case RECORDER_ACQUIRING:
-              snprintf(ans, maxlen, "%s: ACQUIRING is recorder state\n", SCPI_OKS);
-              break;
-            }
-          break;
-        case RPMSG_ANSWER_TIMEOUT:
-          snprintf(ans, maxlen, "%s: TRIG READ timed out\n", SCPI_ERRS);
-          break;
-        case RPMSG_ANSWER_ERR:
-          snprintf(ans, maxlen, "%s: TRIG READ error\n", SCPI_ERRS);
-          break;
-        }
-      }    
+      snprintf(ans, maxlen, "%s: TRIG READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        // print current state
+        switch(gRecorderConfig.state)
+          {
+          case RECORDER_IDLE:
+            snprintf(ans, maxlen, "%s: IDLE is recorder state\n", SCPI_OKS);
+            break;
+          case RECORDER_FORCE:
+          case RECORDER_ARMED:
+            snprintf(ans, maxlen, "%s: ARMED is recorder state\n", SCPI_OKS);
+            break;
+          case RECORDER_ACQUIRING:
+            snprintf(ans, maxlen, "%s: ACQUIRING is recorder state\n", SCPI_OKS);
+            break;
+          }
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: TRIG READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: TRIG READ error\n", SCPI_ERRS);
+        break;
+      }
     }
   else
     {
+    // WRITE
+
     // ARM/DISARM trigger
 
     // next in line is ARM/FORCE/OFF
     p=strtok(NULL," ");
-    if(p!=NULL)
-      {
-      if(strcmp(p,"ARM")==0)
-        trigstate=RECORDER_ARMED;
-      else if(strcmp(p,"FORCE")==0)
-        trigstate=RECORDER_FORCE;
-      else if(strcmp(p,"OFF")==0)
-        trigstate=RECORDER_IDLE;
-      else
-        trigstate=-1;
-      
-      if(trigstate>=0)
-        {
-        // send rpmsg to R5
-        rpmsglen=sizeof(R5_RPMSG_TYPE);
-        rpmsg_ptr->command = RPMSGCMD_WRITE_TRIG;
-        rpmsg_ptr->data[0]=(u32)trigstate;
-        numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
-        if(numbytes<rpmsglen)
-          snprintf(ans, maxlen, "%s: TRIG WRITE rpmsg_send() failed\n", SCPI_ERRS);
-        else
-          snprintf(ans, maxlen, "%s: TRIGGER state updated\n", SCPI_OKS);
-        }
-      else
-        {
-        snprintf(ans, maxlen, "%s: use ARM/FORCE/OFF with RECORD:TRIG command\n", SCPI_ERRS);
-        }        
-      }
-    else
+    if(p==NULL)
       {
       snprintf(ans, maxlen, "%s: missing ARM/FORCE/OFF option\n", SCPI_ERRS);
+      return;
       }
+    if(strcmp(p,"ARM")==0)
+      trigstate=RECORDER_ARMED;
+    else if(strcmp(p,"FORCE")==0)
+      trigstate=RECORDER_FORCE;
+    else if(strcmp(p,"OFF")==0)
+      trigstate=RECORDER_IDLE;
+    else
+      trigstate=-1;
+    
+    if(trigstate<0)
+      {
+      snprintf(ans, maxlen, "%s: use ARM/FORCE/OFF with RECORD:TRIG command\n", SCPI_ERRS);
+      return;
+      }
+    // send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_TRIG;
+    rpmsg_ptr->data[0]=(u32)trigstate;
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: TRIG WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: TRIGGER state updated\n", SCPI_OKS);
     }
   }
 
@@ -1590,7 +1542,7 @@ void printHelp(int filedes)
   sendback(filedes,"                                use FSAMPL? to retrieve the actual value set\n");
   sendback(filedes,"FSAMPL?                       : retrieve sampling frequency (1Hz precision)\n");
   sendback(filedes,"WAVEGEN {OFF|ON}              : start/stop waveform generator mode\n");
-  sendback(filedes,"WAVEGEN:CH_CONFIG <nch> {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
+  sendback(filedes,"WAVEGEN:CH:CONFIG <nch> {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
   sendback(filedes,"                              : configures channel <chan> of the waveform generator;\n");
   sendback(filedes,"                                notes:\n");
   sendback(filedes,"                                - <nch> is in range [1..4];\n");
@@ -1600,14 +1552,14 @@ void printHelp(int filedes)
   sendback(filedes,"                                - <sweeptime> is in seconds\n");
   sendback(filedes,"                                - DC takes only the argument <ampl>;\n");
   sendback(filedes,"                                - SINE takes only the arguments <ampl>, <offs> and <freq1>;\n");
-  sendback(filedes,"WAVEGEN:CH_CONFIG? <nch>      : queries the configuration of waveform generator \n");
+  sendback(filedes,"WAVEGEN:CH:CONFIG? <nch>      : queries the configuration of waveform generator \n");
   sendback(filedes,"                                channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                the answer will be in the form:\n");
   sendback(filedes,"                                {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
-  sendback(filedes,"WAVEGEN:CH_ENABLE <nch> {OFF|ON|SINGLE}\n");
+  sendback(filedes,"WAVEGEN:CH:ENABLE <nch> {OFF|ON|SINGLE}\n");
   sendback(filedes,"                              : enables/disables channel <nch> of the waveform generator;\n");
   sendback(filedes,"                                SINGLE can be used only in association with SWEEP;\n");
-  sendback(filedes,"WAVEGEN:CH_ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
+  sendback(filedes,"WAVEGEN:CH:ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -1683,9 +1635,9 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_FSAMPL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN")==0)
     parse_WAVEGEN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGEN:CH_CONFIG")==0)
+  else if(strcmp(p,"WAVEGEN:CH:CONFIG")==0)
     parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGEN:CH_ENABLE")==0)
+  else if(strcmp(p,"WAVEGEN:CH:ENABLE")==0)
     parse_WAVEGEN_CH_ENABLE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
