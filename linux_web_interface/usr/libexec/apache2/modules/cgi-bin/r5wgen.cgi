@@ -74,7 +74,7 @@ else:
 ch_conf=[dict() for ch in range(4)]
 
 for ch in range(4):
-  qstr='WAVEGEN:CH:ENABLE? '+str(ch+1)+'\n'
+  qstr='WAVEGEN:CH:STATE? '+str(ch+1)+'\n'
   s.sendall(bytes(qstr,encoding='ascii')) 
   ans=(s.recv(1024)).decode("utf-8")
   tok=ans.split(" ",2)
@@ -160,7 +160,7 @@ for name in arguments.keys():
     else:
       the_state='OFF'
     ch_conf[the_chan-1]['en']=the_state
-    cmd_s='WAVEGEN:CH:ENABLE '+str(the_chan)+' '+the_state+'\n'
+    cmd_s='WAVEGEN:CH:STATE '+str(the_chan)+' '+the_state+'\n'
     #print(f'<br> >>>>> {cmd_s} <<<<< <br>')
     s.sendall(cmd_s.encode('ascii')) 
     ans=(s.recv(1024)).decode('utf-8')

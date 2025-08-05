@@ -1189,7 +1189,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
 
 //-------------------------------------------------------------------
 
-void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+void parse_WAVEGEN_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
   int nch,enbl;
@@ -1226,12 +1226,12 @@ void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
     FlushRpmsg();
 
     rpmsglen=sizeof(R5_RPMSG_TYPE);
-    rpmsg_ptr->command = RPMSGCMD_READ_WGEN_CH_EN;
+    rpmsg_ptr->command = RPMSGCMD_READ_WGEN_CH_STATE;
     rpmsg_ptr->data[0] = (u32)(nch);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
       {
-      snprintf(ans, maxlen, "%s: WAVEGEN CHAN EN READ rpmsg_send() failed\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: WAVEGEN CHAN STATE READ rpmsg_send() failed\n", SCPI_ERRS);
       return;
       }
     // now wait for answer
@@ -1240,15 +1240,15 @@ void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       {
       case RPMSG_ANSWER_VALID:
 
-        switch(gWavegenChanConfig[nch-1].enable)
+        switch(gWavegenChanConfig[nch-1].state)
           {
-          case WGEN_CH_ENABLE_OFF:
+          case WGEN_CH_STATE_OFF:
             strcpy(enblstr,"OFF");
             break;
-          case WGEN_CH_ENABLE_ON:
+          case WGEN_CH_STATE_ON:
             strcpy(enblstr,"ON");
             break;
-          case WGEN_CH_ENABLE_SINGLE:
+          case WGEN_CH_STATE_SINGLE:
             strcpy(enblstr,"SINGLE");
             break;
           }
@@ -1256,10 +1256,10 @@ void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         snprintf(ans, maxlen, "%s: %s\n", SCPI_OKS, enblstr);
         break;
       case RPMSG_ANSWER_TIMEOUT:
-        snprintf(ans, maxlen, "%s: WAVEGEN CH ENABLE READ timed out\n", SCPI_ERRS);
+        snprintf(ans, maxlen, "%s: WAVEGEN CH STATE READ timed out\n", SCPI_ERRS);
         break;
       case RPMSG_ANSWER_ERR:
-        snprintf(ans, maxlen, "%s: WAVEGEN CH ENABLE READ error\n", SCPI_ERRS);
+        snprintf(ans, maxlen, "%s: WAVEGEN CH STATE READ error\n", SCPI_ERRS);
         break;
       }
 
@@ -1295,29 +1295,29 @@ void parse_WAVEGEN_CH_ENABLE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       return;
       }
     if(strcmp(p,"OFF")==0)
-      enbl=WGEN_CH_ENABLE_OFF;
+      enbl=WGEN_CH_STATE_OFF;
     else if(strcmp(p,"ON")==0)
-      enbl=WGEN_CH_ENABLE_ON;
+      enbl=WGEN_CH_STATE_ON;
     else if(strcmp(p,"SINGLE")==0)
-      enbl=WGEN_CH_ENABLE_SINGLE;
+      enbl=WGEN_CH_STATE_SINGLE;
     else
       enbl=-1;
     
     if(enbl<0)
       {
-      snprintf(ans, maxlen, "%s: use ON/OFF/SINGLE for WAVEGEN channel enable state\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: use ON/OFF/SINGLE for WAVEGEN channel state\n", SCPI_ERRS);
       return;
       }
 
 
     // everything is ready: send rpmsg to R5
     rpmsglen=sizeof(R5_RPMSG_TYPE);
-    rpmsg_ptr->command = RPMSGCMD_WRITE_WGEN_CH_EN;
+    rpmsg_ptr->command = RPMSGCMD_WRITE_WGEN_CH_STATE;
     rpmsg_ptr->data[0] = (u32)(nch);
     rpmsg_ptr->data[1] = (u32)(enbl);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
-      snprintf(ans, maxlen, "%s: WAVEGEN CH EN WRITE rpmsg_send() failed\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: WAVEGEN CH STATE WRITE rpmsg_send() failed\n", SCPI_ERRS);
     else
       snprintf(ans, maxlen, "%s: WAVEGEN chan %d is now %s\n", SCPI_OKS, nch, p);
     }
@@ -1455,6 +1455,127 @@ void parse_PIDRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
 void parse_IIRRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   do_FilterReset(FILTERTYPE_IIR,ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,enbl;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request control loop channel ON/OFF state
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: control loop channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_CTRLLOOP_CH_STATE;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP CHAN STATE READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %s\n", SCPI_OKS, (gCtrlLoopChanConfig[nch-1].state == CTRLLOOP_CH_ENABLED) ? "ON" : "OFF");
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: CTRLLOOP CH ENABLE READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: CTRLLOOP CH ENABLE READ error\n", SCPI_ERRS);
+        break;
+      }
+
+    }
+  else
+    {
+    // WRITE: enable/disable one control loop channel
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: control loop channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the state (ON/OFF)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"OFF")==0)
+      enbl=CTRLLOOP_CH_DISABLED;
+    else if(strcmp(p,"ON")==0)
+      enbl=CTRLLOOP_CH_ENABLED;
+    else
+      enbl=-1;
+    
+    if(enbl<0)
+      {
+      snprintf(ans, maxlen, "%s: use ON/OFF for control loop channel state\n", SCPI_ERRS);
+      return;
+      }
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_WGEN_CH_STATE;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(enbl);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: CTRLLOOP CH STATE WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s: control loop chan %d is now %s\n", SCPI_OKS, nch, p);
+    }
+
   }
 
 
@@ -1821,10 +1942,10 @@ void printHelp(int filedes)
   sendback(filedes,"                                channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                the answer will be in the form:\n");
   sendback(filedes,"                                {DC|SINE|SWEEP} <ampl> <offs> <freq1> <freq2> <sweeptime>\n");
-  sendback(filedes,"WAVEGEN:CH:ENABLE <nch> {OFF|ON|SINGLE}\n");
+  sendback(filedes,"WAVEGEN:CH:STATE <nch> {OFF|ON|SINGLE}\n");
   sendback(filedes,"                              : enables/disables channel <nch> of the waveform generator;\n");
   sendback(filedes,"                                SINGLE can be used only in association with SWEEP;\n");
-  sendback(filedes,"WAVEGEN:CH:ENABLE? <nch>      : retrieves on/off state of channel <nch> of the waveform generator\n");
+  sendback(filedes,"WAVEGEN:CH:STATE? <nch>       : retrieves on/off state of channel <nch> of the waveform generator\n");
   sendback(filedes,"CTRLLOOP {ON|OFF}             : global ON/OFF of control loop;\n");
   sendback(filedes,"                                each channel must be individually enabled/disabled by\n");
   sendback(filedes,"                                the command CTRLLOOP:CH:ENABLE\n");
@@ -1834,6 +1955,9 @@ void printHelp(int filedes)
   sendback(filedes,"CTRLLOOP:CH:IIR:RESET <nch> <instance>\n");
   sendback(filedes,"                              : reset memory of instance <instance> (in range [1..2]) of IIR\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
+  sendback(filedes,"CTRLLOOP:CH:STATE <nch> {ON|OFF}\n");
+  sendback(filedes,"                              : enables/disables channel <nch> of the control loop\n");
+  sendback(filedes,"CTRLLOOP:CH:STATE? <nch>      : retrieves on/off state of control loop channel <nch>\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -1914,13 +2038,15 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
   else if(strcmp(p,"WAVEGEN:CH:CONFIG")==0)
     parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN:CH:ENABLE")==0)
-    parse_WAVEGEN_CH_ENABLE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+    parse_WAVEGEN_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP")==0)
     parse_CTRLLOOP(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:PID:RESET")==0)
     parse_PIDRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:IIR:RESET")==0)
     parse_IIRRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"WAVEGEN:CH:ENABLE")==0)
+    parse_CTRLLOOP_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )

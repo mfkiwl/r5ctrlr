@@ -227,7 +227,7 @@ elif acq_state==ACQ_START :
   # print(datetime.now())
   # print(' : configuring...')
 
-  cmd_s='WAVEGEN:CH:ENABLE '+str(sweep_ch)+' OFF\n'
+  cmd_s='WAVEGEN:CH:STATE '+str(sweep_ch)+' OFF\n'
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
   tok=ans.split(" ",2)
@@ -264,7 +264,7 @@ elif acq_state==ACQ_START :
   if tok[0].strip()=='ERR:':
     print('<br>Error programming the waveform generator (step 5)<br>')
 
-  cmd_s='WAVEGEN:CH:ENABLE '+str(sweep_ch)+' SINGLE\n'
+  cmd_s='WAVEGEN:CH:STATE '+str(sweep_ch)+' SINGLE\n'
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
   tok=ans.split(" ",2)

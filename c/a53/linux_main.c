@@ -191,12 +191,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       break;
 
     // readback wavefrom generator channel on/off state
-    case RPMSGCMD_READ_WGEN_CH_EN:
+    case RPMSGCMD_READ_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
       
-      gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gWavegenChanConfig[nch-1].state   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback control loop channel on/off state
+    case RPMSGCMD_READ_CTRLLOOP_CH_STATE:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      
+      gCtrlLoopChanConfig[nch-1].state   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
     // readback trigger state
@@ -412,7 +421,7 @@ void InitVars(void)
     gADC_gain[i]=1;
     gDAC_offs_cnt[i]=0;
 
-    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
+    gWavegenChanConfig[i].state  = WGEN_CH_STATE_OFF;
     gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
     gWavegenChanConfig[i].ampl   = 0.;
     gWavegenChanConfig[i].offs   = 0.;

@@ -487,12 +487,12 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
     
-    // enable/disable one wavefrom generator channel
-    case RPMSGCMD_WRITE_WGEN_CH_EN:
+    // enable/disable one waveform generator channel
+    case RPMSGCMD_WRITE_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         {
-        LPRINTF("RPMSGCMD_WRITE_WGEN_CH_EN index out of range\n\r");
+        LPRINTF("RPMSGCMD_WRITE_WGEN_CH_STATE index out of range\n\r");
         return RPMSG_ERR_PARAM;
         }
       
@@ -505,27 +505,67 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         gCurSweepSamples[i]=0;
         }
 
-      gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gWavegenChanConfig[nch-1].state = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
-    // read back on/off state of one wavefrom generator channel
-    case RPMSGCMD_READ_WGEN_CH_EN:
+    // read back on/off state of one waveform generator channel
+    case RPMSGCMD_READ_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         {
-        LPRINTF("RPMSGCMD_READ_WGEN_CH_EN index out of range\n\r");
+        LPRINTF("RPMSGCMD_READ_WGEN_CH_STATE index out of range\n\r");
         return RPMSG_ERR_PARAM;
         }
       
-      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_EN;
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_STATE;
       ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
-      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gWavegenChanConfig[nch-1].enable);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gWavegenChanConfig[nch-1].state);
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
-        LPRINTF("WGEN CH EN READ incomplete answer transmitted.\n\r");
+        LPRINTF("WGEN CH STATE READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+    // enable/disable one control loop channel
+    case RPMSGCMD_WRITE_CTRLLOOP_CH_STATE:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_STATE index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+
+      // reset filters inside control loop channel
+      ResetPID(nch-1,0);
+      ResetPID(nch-1,1);
+      ResetIIR(nch-1,0);
+      ResetIIR(nch-1,1);
+
+      gCtrlLoopChanConfig[nch-1].state = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // read back on/off state of a control loop channel
+    case RPMSGCMD_READ_CTRLLOOP_CH_STATE:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_CTRLLOOP_CH_STATE index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_CTRLLOOP_CH_STATE;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gCtrlLoopChanConfig[nch-1].state);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("CTRLLOOP CH STATE READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
@@ -1281,7 +1321,7 @@ void InitVars(void)
     gFreq[i]=0.;
     gTotSweepSamples[i]=0;
     gCurSweepSamples[i]=0;
-    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
+    gWavegenChanConfig[i].state  = WGEN_CH_STATE_OFF;
     gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
     gWavegenChanConfig[i].ampl   = 0.;
     gWavegenChanConfig[i].offs   = 0.;
@@ -1494,7 +1534,7 @@ int main()
         {
         for(i=0; i<4; i++)
           {
-          if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_OFF)
+          if(gWavegenChanConfig[i].state==WGEN_CH_STATE_OFF)
             g_y[i]=0.0;
           else
             {
@@ -1555,10 +1595,10 @@ int main()
                 if(gCurSweepSamples[i]>=gTotSweepSamples[i])
                   {
                   // end of sweep
-                  if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_SINGLE)
+                  if(gWavegenChanConfig[i].state==WGEN_CH_STATE_SINGLE)
                     {
                     // stop after a single sweep
-                    gWavegenChanConfig[i].enable=WGEN_CH_ENABLE_OFF;
+                    gWavegenChanConfig[i].state=WGEN_CH_STATE_OFF;
                     gPhase[i]=0.;
                     gFreq[i]=0.;
                     }
@@ -1687,15 +1727,15 @@ int main()
             {
             LPRINTF("WAVEGEN CH# %d ",i+1);
 
-            switch(gWavegenChanConfig[i].enable)
+            switch(gWavegenChanConfig[i].state)
               {
-              case WGEN_CH_ENABLE_OFF:
+              case WGEN_CH_STATE_OFF:
                 LPRINTF("   OFF  ");
                 break;
-              case WGEN_CH_ENABLE_ON:
+              case WGEN_CH_STATE_ON:
                 LPRINTF("   ON   ");
                 break;
-              case WGEN_CH_ENABLE_SINGLE:
+              case WGEN_CH_STATE_SINGLE:
                 LPRINTF(" SINGLE ");
                 break;
               }
