@@ -1530,7 +1530,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
     switch(status)
       {
       case RPMSG_ANSWER_VALID:
-        snprintf(ans, maxlen, "%s: %s %g %g %g %g %g\n",
+        snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
                     SCPI_OKS,
                     gCtrlLoopChanConfig[nch-1].PID[instance-1].Gp,
                     gCtrlLoopChanConfig[nch-1].PID[instance-1].Gi,
@@ -1687,6 +1687,188 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
       snprintf(ans, maxlen, "%s: PID GAINS WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
+void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch, instance;
+  float x;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request PID thresholds
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_PID_THR;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: PID THR READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %g %g\n",
+                    SCPI_OKS,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].in_thr,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].out_sat
+                );
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: PID THR READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: PID THR READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: set PID thresholds
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // start filling the rpmsg with the integer parameters
+    rpmsg_ptr->command = RPMSGCMD_WRITE_PID_THR;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+
+    // now parse floating point values; 
+
+    // next in line is input deadband
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing input dead band\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid input dead band\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[2]), &x, sizeof(u32));
+
+    // next in line is output saturation
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing output saturation\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid output saturation value\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[3]), &x, sizeof(u32));
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: PID THR WRITE rpmsg_send() failed\n", SCPI_ERRS);
     else
       snprintf(ans, maxlen, "%s\n", SCPI_OKS);
     }
@@ -2323,6 +2505,15 @@ void printHelp(int filedes)
   sendback(filedes,"CTRLLOOP:CH:PID:Gains? <nch> <instance>\n");
   sendback(filedes,"                              : retrieve gains of instance <instance> (in range [1..2]) of PID\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:THResholds <nch> <instance> <IN_dead_band> <OUT_saturation>\n");
+  sendback(filedes,"                              : set input deadband and output saturation thresholds\n");
+  sendback(filedes,"                                of instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                values are floating point with full scale +/-1.0\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:THResholds? <nch> <instance>\n");
+  sendback(filedes,"                              : query input deadband and output saturation thresholds\n");
+  sendback(filedes,"                                of instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]);\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -2416,6 +2607,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_CTRLLOOP_CH_INSEL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"CTRLLOOP:CH:PID:G")==0) || (strcmp(p,"CTRLLOOP:CH:PID:GAINS")==0) )
     parse_PIDGAINS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"CTRLLOOP:CH:PID:THR")==0) || (strcmp(p,"CTRLLOOP:CH:PID:THRESHOLDS")==0) )
+    parse_PIDTHRESH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )

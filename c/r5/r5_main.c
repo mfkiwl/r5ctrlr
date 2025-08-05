@@ -501,10 +501,64 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
-        LPRINTF("WGEN CH CONF READ incomplete answer transmitted.\n\r");
+        LPRINTF("PID GAINS READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
+
+
+    // set PID thresholds
+    case RPMSGCMD_WRITE_PID_THR:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_THR channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_THR instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat),   &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      break;
+
+
+    // read back PID thresholds
+    case RPMSGCMD_READ_PID_THR:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_THR channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_THR instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_THR;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID THR READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
 
     // send current state
     case RPMSGCMD_READ_STATE:

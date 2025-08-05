@@ -237,6 +237,20 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G_aiw), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
       break;
 
+    // readback PID thresholds
+    case RPMSGCMD_READ_PID_THR:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        return RPMSG_ERR_PARAM;
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat),   &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      break;
+
     // readback trigger state
     case RPMSGCMD_READ_TRIG:
       gRecorderConfig.state=(int)( ((R5_RPMSG_TYPE*)data)->data[0] );
