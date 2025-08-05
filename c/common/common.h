@@ -74,6 +74,8 @@ typedef    int16_t s16;
 #define RPMSGCMD_RESET_IIR                 28
 #define RPMSGCMD_WRITE_CTRLLOOP_CH_STATE   29
 #define RPMSGCMD_READ_CTRLLOOP_CH_STATE    30
+#define RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL   31
+#define RPMSGCMD_READ_CTRLLOOP_CH_INSEL    32
 
 // R5 application state
 #define R5CTRLR_IDLE     0

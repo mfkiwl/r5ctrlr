@@ -79,6 +79,7 @@ void do_FilterReset(int filtertype, char *ans, size_t maxlen, int rw, RPMSG_ENDP
 void parse_PIDRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void parse_IIRRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
+void parse_CTRLLOOP_CH_INSEL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void parse_TRIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void printSamples(int filedes);

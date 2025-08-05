@@ -245,6 +245,46 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
 
+    // select control loop channel input
+    case RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL selector out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      gCtrlLoopChanConfig[nch-1].inputSelect=d-1;
+      break;
+
+    // read back ctrl loop input selector
+    case RPMSGCMD_READ_CTRLLOOP_CH_INSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_CTRLLOOP_CH_INSEL index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_CTRLLOOP_CH_INSEL;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gCtrlLoopChanConfig[nch-1].inputSelect+1);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("CTRLLOOP IN_SEL READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
     // update ADC channel offset with the value requested by linux
     case RPMSGCMD_WRITE_ADCOFFS:
       d=((R5_RPMSG_TYPE*)data)->data[0];

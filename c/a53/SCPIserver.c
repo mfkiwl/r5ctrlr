@@ -694,7 +694,7 @@ void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 void parse_ADCGAIN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
-  int nch,offs;
+  int nch;
   int numbytes, rpmsglen, status;
   float g;
 
@@ -1581,6 +1581,123 @@ void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
 
 //-------------------------------------------------------------------
 
+void parse_CTRLLOOP_CH_INSEL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch,insel;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request control loop channel input selector
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: control loop channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_CTRLLOOP_CH_INSEL;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP CH IN_SEL READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %d\n", SCPI_OKS, gCtrlLoopChanConfig[nch-1].inputSelect+1);
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: CTRLLOOP CH IN_SEL READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: CTRLLOOP CH IN_SEL READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: set control loop channel input selector
+
+    // next in line is the desired ADC channel
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing control loop channel\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid control loop channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: control loop channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the input selector
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing input selector\n", SCPI_ERRS);
+      return;
+      }
+    insel=(int)strtol(p, NULL, 10);
+    if(errno!=0 && insel==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid input selector\n", SCPI_ERRS);
+      return;
+      }
+    if((insel<1)||(insel>5))
+      {
+      snprintf(ans, maxlen, "%s: input selector out of range [1..5]\n", SCPI_ERRS);
+      return;
+      }
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(insel);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: CTRLLOOP:CH:IN_SEL WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_TRIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -1956,8 +2073,12 @@ void printHelp(int filedes)
   sendback(filedes,"                              : reset memory of instance <instance> (in range [1..2]) of IIR\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
   sendback(filedes,"CTRLLOOP:CH:STATE <nch> {ON|OFF}\n");
-  sendback(filedes,"                              : enables/disables channel <nch> of the control loop\n");
-  sendback(filedes,"CTRLLOOP:CH:STATE? <nch>      : retrieves on/off state of control loop channel <nch>\n");
+  sendback(filedes,"                              : enables/disables channel <nch> (in range [1..4]) of the control loop\n");
+  sendback(filedes,"CTRLLOOP:CH:STATE? <nch>      : retrieves on/off state of control loop channel <nch> (in range [1..4])\n");
+  sendback(filedes,"CTRLLOOP:CH:IN_SEL <nch> <src>: selects input to control loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                <src> = 5 selects the output of the MISO matrix;\n");
+  sendback(filedes,"                                <src> = 1..4 selects the corresponding waveform generator channel\n");
+  sendback(filedes,"CTRLLOOP:CH:IN_SEL? <nch>     : retrieves the input to control loop channel <nch> (in range [1..4]);\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -2037,7 +2158,7 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_WAVEGEN(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"WAVEGEN:CH:CONFIG")==0)
     parse_WAVEGEN_CH_CONFIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGEN:CH:ENABLE")==0)
+  else if(strcmp(p,"WAVEGEN:CH:STATE")==0)
     parse_WAVEGEN_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP")==0)
     parse_CTRLLOOP(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
@@ -2045,8 +2166,10 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_PIDRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:IIR:RESET")==0)
     parse_IIRRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"WAVEGEN:CH:ENABLE")==0)
+  else if(strcmp(p,"CTRLLOOP:CH:STATE")==0)
     parse_CTRLLOOP_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"CTRLLOOP:CH:IN_SEL")==0) || (strcmp(p,"CTRLLOOP:CH:IN_SELECT")==0) )
+    parse_CTRLLOOP_CH_INSEL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )
