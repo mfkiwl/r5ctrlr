@@ -2040,6 +2040,168 @@ void parse_PID_PVDERIV(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
 
 //-------------------------------------------------------------------
 
+void parse_PID_INVCMD(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch, instance, enbl;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_PID_INVCMD;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: PID INV_CMD READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %s is the state of command inversion\n",
+                    SCPI_OKS,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].invert_cmd ? "ON" : "OFF"
+                );
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: PID INV_CMD READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: PID INV_CMD READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: enable/disable command inversion
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the state (ON/OFF)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing ON/OFF option\n", SCPI_ERRS);
+      return;
+      }
+    if(strcmp(p,"OFF")==0)
+      enbl=0;
+    else if(strcmp(p,"ON")==0)
+      enbl=1;
+    else
+      enbl=-1;
+    
+    if(enbl<0)
+      {
+      snprintf(ans, maxlen, "%s: use ON/OFF for command inversion\n", SCPI_ERRS);
+      return;
+      }
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_WRITE_PID_INVCMD;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+    rpmsg_ptr->data[2] = (u32)(enbl);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: PID INV_CMD WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -2685,6 +2847,15 @@ void printHelp(int filedes)
   sendback(filedes,"                                for instance <instance> (in range [1..2]) of PID\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                answer is {ON|OFF}\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:INVERTCMD <nch> <instance> {ON|OFF}\n");
+  sendback(filedes,"                              : enables/disable command inversion\n");
+  sendback(filedes,"                                for instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:INVERTCMD? <nch> <instance>\n");
+  sendback(filedes,"                              : queries whether the command is inverted\n");
+  sendback(filedes,"                                in instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                answer is {ON|OFF}\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -2782,6 +2953,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_PIDTHRESH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:PID:PVDERIV")==0)
     parse_PID_PVDERIV(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"CTRLLOOP:CH:PID:INVERTCMD")==0)
+    parse_PID_INVCMD(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )
