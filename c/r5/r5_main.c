@@ -657,6 +657,56 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       break;
 
+
+    // set PID measurement input inversion
+    case RPMSGCMD_WRITE_PID_INVMEAS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_INVMEAS channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_INVMEAS instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
+
+    // read PID measurement input inversion
+    case RPMSGCMD_READ_PID_INVMEAS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_INVMEAS channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_INVMEAS instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_INVMEAS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      ((R5_RPMSG_TYPE*)data)->data[2] = (u32)(gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas ? 1 : 0);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID INV_MEAS READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+
     // send current state
     case RPMSGCMD_READ_STATE:
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_STATE;
