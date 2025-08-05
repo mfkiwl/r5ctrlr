@@ -251,6 +251,18 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat),   &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
       break;
 
+    // readback PID derivative on process variable
+    case RPMSGCMD_READ_PID_PV_DERIV:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        return RPMSG_ERR_PARAM;
+
+      gCtrlLoopChanConfig[nch-1].PID[d-1].deriv_on_PV = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
     // readback trigger state
     case RPMSGCMD_READ_TRIG:
       gRecorderConfig.state=(int)( ((R5_RPMSG_TYPE*)data)->data[0] );
