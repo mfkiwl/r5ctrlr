@@ -1460,6 +1460,242 @@ void parse_IIRRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
 
 //-------------------------------------------------------------------
 
+void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch, instance;
+  float x;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request PID gains
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_PID_GAINS;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: PID GAINS READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %s %g %g %g %g %g\n",
+                    SCPI_OKS,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].Gp,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].Gi,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].G1d,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].G2d,
+                    gCtrlLoopChanConfig[nch-1].PID[instance-1].G_aiw
+                );
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: PID GAINS READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: PID GAINS READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: set PID gains
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // start filling the rpmsg with the integer parameters
+    rpmsg_ptr->command = RPMSGCMD_WRITE_PID_GAINS;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+
+    // now parse floating point values; 
+
+    // next in line is Gp
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing Gp\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid Gp\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[2]), &x, sizeof(u32));
+
+    // next in line is Gi
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing Gi\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid Gi\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[3]), &x, sizeof(u32));
+
+    // next in line is G1D
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing G1D\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid G1D\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[4]), &x, sizeof(u32));
+
+    // next in line is G2D
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing G2D\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid G2D\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[5]), &x, sizeof(u32));
+
+    // next in line is G_AIW (anti integral windup)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing G_AIW\n", SCPI_ERRS);
+      return;
+      }
+    x=strtof(p, NULL);
+    // error check with float does not work
+    // if(errno!=0 && errno!=EIO && x==0.0F)
+    //   {
+    //   snprintf(ans, maxlen, "%s: invalid G_AIW\n", SCPI_ERRS);
+    //   return;
+    //   }
+    // write floating point values directly as float (32 bit)
+    memcpy(&(rpmsg_ptr->data[6]), &x, sizeof(u32));
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: PID GAINS WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -2079,6 +2315,14 @@ void printHelp(int filedes)
   sendback(filedes,"                                <src> = 5 selects the output of the MISO matrix;\n");
   sendback(filedes,"                                <src> = 1..4 selects the corresponding waveform generator channel\n");
   sendback(filedes,"CTRLLOOP:CH:IN_SEL? <nch>     : retrieves the input to control loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:Gains <nch> <instance> <Gp> <Gi> <G1d> <G2d> <G_AIW>\n");
+  sendback(filedes,"                              : set gains of instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]).\n");
+  sendback(filedes,"                                Gains are floating point values;\n");
+  sendback(filedes,"                                <G_AIW> is the anti integral windup gain (usually= 1.0)\n");
+  sendback(filedes,"CTRLLOOP:CH:PID:Gains? <nch> <instance>\n");
+  sendback(filedes,"                              : retrieve gains of instance <instance> (in range [1..2]) of PID\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
   sendback(filedes,"RECORD:TRIGger {ARM|FORCE|OFF}: same settings of an oscilloscope trigger:\n");
   sendback(filedes,"                                - ARM   waits for the conditions specified in\n");
   sendback(filedes,"                                        RECORD:TRIG_SETUP to start an acquisition\n");
@@ -2170,6 +2414,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_CTRLLOOP_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"CTRLLOOP:CH:IN_SEL")==0) || (strcmp(p,"CTRLLOOP:CH:IN_SELECT")==0) )
     parse_CTRLLOOP_CH_INSEL(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if( (strcmp(p,"CTRLLOOP:CH:PID:G")==0) || (strcmp(p,"CTRLLOOP:CH:PID:GAINS")==0) )
+    parse_PIDGAINS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG")==0) || (strcmp(p,"RECORD:TRIGGER")==0) )
     parse_TRIG(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"RECORD:TRIG:SETUP")==0) || (strcmp(p,"RECORD:TRIGGER:SETUP")==0) )

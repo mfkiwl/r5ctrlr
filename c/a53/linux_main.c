@@ -175,7 +175,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       gR5ctrlState=(int)((R5_RPMSG_TYPE*)data)->data[0];
       break;
 
-    // readback wavefrom generator channel config
+    // readback waveform generator channel config
     case RPMSGCMD_READ_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
@@ -190,7 +190,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gWavegenChanConfig[nch-1].dt),   &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
       break;
 
-    // readback wavefrom generator channel on/off state
+    // readback waveform generator channel on/off state
     case RPMSGCMD_READ_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
@@ -218,6 +218,23 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         return RPMSG_ERR_PARAM;
       
       gCtrlLoopChanConfig[nch-1].inputSelect=d-1;
+      break;
+
+    // readback PID gains
+    case RPMSGCMD_READ_PID_GAINS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        return RPMSG_ERR_PARAM;
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gp),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gi),    &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G1d),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G2d),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G_aiw), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
       break;
 
     // readback trigger state
