@@ -1460,6 +1460,196 @@ void parse_IIRRESET(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
 
 //-------------------------------------------------------------------
 
+void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int nch, instance, i;
+  float x;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request IIR coefficients
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_IIR_COEFF;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: IIR COEFF READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
+                    SCPI_OKS,
+                    gCtrlLoopChanConfig[nch-1].IIR[instance-1].a[0],
+                    gCtrlLoopChanConfig[nch-1].IIR[instance-1].a[1],
+                    gCtrlLoopChanConfig[nch-1].IIR[instance-1].a[2],
+                    gCtrlLoopChanConfig[nch-1].IIR[instance-1].b[0],
+                    gCtrlLoopChanConfig[nch-1].IIR[instance-1].b[1]
+                );
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: IIR COEFF READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: IIR COEFF READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: set IIR COEFF
+
+    // next in line is the channel number
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    nch=(int)strtol(p, NULL, 10);
+    if(errno!=0 && nch==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid CTRLLOOP channel number\n", SCPI_ERRS);
+      return;
+      }
+    if((nch<1)||(nch>4))
+      {
+      snprintf(ans, maxlen, "%s: CTRLLOOP channel out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is the instance (1 or 2)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
+      return;
+      }
+    instance=(int)strtol(p, NULL, 10);
+    if(errno!=0 && instance==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid instance value\n", SCPI_ERRS);
+      return;
+      }
+    if((instance<1)||(instance>2))
+      {
+      snprintf(ans, maxlen, "%s: instance value out of range [1..2]\n", SCPI_ERRS);
+      return;
+      }
+
+    // start filling the rpmsg with the integer parameters
+    rpmsg_ptr->command = RPMSGCMD_WRITE_IIR_COEFF;
+    rpmsg_ptr->data[0] = (u32)(nch);
+    rpmsg_ptr->data[1] = (u32)(instance);
+
+    // now parse floating point values;
+
+    // first parse A0 to A2
+    for(i=0; i<3; i++)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing A%d\n", SCPI_ERRS, i);
+        return;
+        }
+      x=strtof(p, NULL);
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid A%d\n", SCPI_ERRS, i);
+      //   return;
+      //   }
+      // write floating point values directly as float (32 bit)
+      memcpy(&(rpmsg_ptr->data[2+i]), &x, sizeof(u32));
+      }
+
+    // then parse B0 and B1
+    for(i=0; i<2; i++)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing B%d\n", SCPI_ERRS, i);
+        return;
+        }
+      x=strtof(p, NULL);
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid B%d\n", SCPI_ERRS, i);
+      //   return;
+      //   }
+      // write floating point values directly as float (32 bit)
+      memcpy(&(rpmsg_ptr->data[5+i]), &x, sizeof(u32));
+      }
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: IIR COEFF WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -2940,7 +3130,8 @@ void printHelp(int filedes)
   sendback(filedes,"ADC:CH:OFFSet <nch> <val>     : set/get the offset of ADC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
-  sendback(filedes,"ADC:CH:Gain <nch> <val>       : set/get the gain of ADC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"ADC:CH:Gain <nch> <val>       : set the gain of ADC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"ADC:CH:Gain? <nch>            : get the gain of ADC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in floating point\n");
   sendback(filedes,"FSAMPL <val>                  : request to change sampling frequency to <val> Hz;\n");
   sendback(filedes,"                                it will be approximated to the closest possible frequency;\n");
@@ -2975,6 +3166,13 @@ void printHelp(int filedes)
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
   sendback(filedes,"CTRLLOOP:CH:IIR:RESET <nch> <instance>\n");
   sendback(filedes,"                              : reset memory of instance <instance> (in range [1..2]) of IIR\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
+  sendback(filedes,"CTRLLOOP:CH:IIR:COEFF <nch> <instance> <A0> <A1> <A2> <B0> <B2>\n");
+  sendback(filedes,"                              : set coefficients of instance <instance> (in range [1..2]) of IIR\n");
+  sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                coefficients are floating point values;\n");
+  sendback(filedes,"CTRLLOOP:CH:IIR:COEFF? <nch> <instance>\n");
+  sendback(filedes,"                              : retrieve coefficients of instance <instance> (in range [1..2]) of IIR\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
   sendback(filedes,"CTRLLOOP:CH:STATE <nch> {ON|OFF}\n");
   sendback(filedes,"                              : enables/disables channel <nch> (in range [1..4]) of the control loop\n");
@@ -3114,6 +3312,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_PIDRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:IIR:RESET")==0)
     parse_IIRRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"CTRLLOOP:CH:IIR:COEFF")==0)
+    parse_IIRCOEFF(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:STATE")==0)
     parse_CTRLLOOP_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"CTRLLOOP:CH:IN_SEL")==0) || (strcmp(p,"CTRLLOOP:CH:IN_SELECT")==0) )

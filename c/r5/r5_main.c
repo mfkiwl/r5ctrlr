@@ -507,6 +507,64 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       break;
 
 
+    // set IIR coefficients
+    case RPMSGCMD_WRITE_IIR_COEFF:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_IIR_COEFF channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_IIR_COEFF instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[0]), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[1]), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[2]), &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[0]), &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+    // read back PID gains
+    case RPMSGCMD_READ_IIR_COEFF:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_IIR_COEFF channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_IIR_COEFF instance out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_IIR_COEFF;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[0]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[1]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[4]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[2]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[5]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[0]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[6]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("IIR COEFF READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+
     // set PID thresholds
     case RPMSGCMD_WRITE_PID_THR:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
