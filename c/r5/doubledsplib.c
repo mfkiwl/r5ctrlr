@@ -46,12 +46,12 @@ double IIR2(double x, IIR2_COEFF *coeff)
 // a and b have dimension (dim+1)
 // out = (a0+a1*x1+...+an*xn) / (b0+b1*x1+...+bn*xn)
 
-double MISO(double *x, double *a, double *b, int dim)
+double MISO(double *x, float *a, float *b, int dim)
   {
   int i;
   double num,den;
-  num=*a;
-  den=*b;
+  num=(double)(*a);
+  den=(double)(*b);
   for(i=0;i<dim;i++)
     {
     num=num+(*(a+i+1))*(*(x+i));
@@ -90,7 +90,7 @@ double PID(double command, double meas, PID_GAINS *coeff)
     }
   else
     {
-    G2Dcorr=coeff->G2d;
+    G2Dcorr=(double)(coeff->G2d);
     }
 
   // prop

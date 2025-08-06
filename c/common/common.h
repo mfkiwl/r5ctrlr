@@ -147,9 +147,9 @@ typedef struct
   {
   int state;         // ENABLED/DISABLED
   int inputSelect;
-  double input_MISO_A[5], input_MISO_B[5],
-         input_MISO_C[5], input_MISO_D[5],
-         output_MISO_E[5], output_MISO_F[5];
+  float input_MISO_A[5], input_MISO_B[5],
+        input_MISO_C[5], input_MISO_D[5],
+        output_MISO_E[5], output_MISO_F[5];
   PID_GAINS  PID[2];
   IIR2_COEFF IIR[2];
   } CTRLLOOP_CH_CONFIG;

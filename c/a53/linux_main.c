@@ -98,7 +98,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 
   u32 cmd, d;
   int nch, i;
-  double *dblp;
+  float *xp;
 
   gIncomingRpmsgs++;
 
@@ -269,28 +269,28 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       switch(d)
           {
           case 0:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
             break;
           case 1:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
             break;
           case 2:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
             break;
           case 3:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
             break;
           case 4:
-            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
             break;
           case 5:
-            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
             break;
           }
 
       // read floating point values directly as float (32 bit)
       for(i=0; i<5; i++)
-        memcpy(dblp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
+        memcpy(xp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
       
       break;
 

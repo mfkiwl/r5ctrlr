@@ -26,8 +26,8 @@
 typedef struct
   {
   // user coeff
-  double a[3]; // x_i coeff
-  double b[2]; // y_i coeff
+  float a[3]; // x_i coeff
+  float b[2]; // y_i coeff
   // internal "static" vars
   double x[2]; // x pipeline
   double y[2]; // y pipeline
@@ -36,13 +36,13 @@ typedef struct
 typedef struct
   {
   // user gains
-  double Gp;         // prop gain
-  double Gi;         // integr gain
-  double G1d;        // deriv gain #1
-  double G2d;        // deriv gain #2
-  double G_aiw;      // anti integral windup gain
-  double out_sat;    // output saturation limit
-  double in_thr;     // input dead band
+  float Gp;         // prop gain
+  float Gi;         // integr gain
+  float G1d;        // deriv gain #1
+  float G2d;        // deriv gain #2
+  float G_aiw;      // anti integral windup gain
+  float out_sat;    // output saturation limit
+  float in_thr;     // input dead band
   bool deriv_on_PV;  // derivative on process variable?
   bool invert_cmd;   // invert commanded value
   bool invert_meas;  // invert measured value
@@ -70,7 +70,7 @@ double IIR2(double x, IIR2_COEFF *coeff);
 // x is a double vector of dimension dim
 // a and b have dimension (dim+1)
 // out = (a0+a1*x1+...+an*xn) / (b0+b1*x1+...+bn*xn)
-double MISO(double *x, double *a, double *b, int dim);
+double MISO(double *x, float *a, float *b, int dim);
 
 double PID(double command, double meas, PID_GAINS *coeff);
 

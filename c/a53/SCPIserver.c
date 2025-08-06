@@ -1654,8 +1654,7 @@ void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
   {
   char *p;
   int matrixindex, matrixrow, i;
-  float x;
-  double *dblp;
+  float x, *xp;
   int numbytes, rpmsglen, status;
 
   
@@ -1724,27 +1723,27 @@ void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
         switch(matrixindex)
           {
           case 0:
-            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_A;
+            xp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_A;
             break;
           case 1:
-            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_B;
+            xp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_B;
             break;
           case 2:
-            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_C;
+            xp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_C;
             break;
           case 3:
-            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_D;
+            xp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_D;
             break;
           case 4:
-            dblp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_E;
+            xp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_E;
             break;
           case 5:
-            dblp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_F;
+            xp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_F;
             break;
           }
         snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
                     SCPI_OKS,
-                    *dblp, *(dblp+1), *(dblp+2), *(dblp+3), *(dblp+4)
+                    *xp, *(xp+1), *(xp+2), *(xp+3), *(xp+4)
                 );
         break;
       case RPMSG_ANSWER_TIMEOUT:
@@ -2848,7 +2847,7 @@ void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
 
     // everything is ready: send rpmsg to R5
     rpmsglen=sizeof(R5_RPMSG_TYPE);
-    rpmsg_ptr->command = RPMSGCMD_WRITE_WGEN_CH_STATE;
+    rpmsg_ptr->command = RPMSGCMD_WRITE_CTRLLOOP_CH_STATE;
     rpmsg_ptr->data[0] = (u32)(nch);
     rpmsg_ptr->data[1] = (u32)(enbl);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);

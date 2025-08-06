@@ -12,7 +12,7 @@
 
 #include "r5_main.h"
 
-#define PROFILE
+//#define PROFILE
 //#define PRINTOUT
 
 // ##########  globals  #######################
@@ -101,7 +101,8 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 
   u32 cmd, d, d2;
   int i, numbytes, rpmsglen, ret, nch;
-  double dval, *dblp;
+  double dval;
+  float *xp;
 
   // update the total number of received messages, for debug purposes
   irq_cntr[IPI_CNTR]++;
@@ -583,28 +584,28 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       switch(d)
           {
           case 0:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
             break;
           case 1:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
             break;
           case 2:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
             break;
           case 3:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
             break;
           case 4:
-            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
             break;
           case 5:
-            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
             break;
           }
 
       // read floating point values directly as float (32 bit)
       for(i=0; i<5; i++)
-        memcpy(dblp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
+        memcpy(xp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
       
       break;
 
@@ -627,22 +628,22 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       switch(d)
           {
           case 0:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
             break;
           case 1:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
             break;
           case 2:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
             break;
           case 3:
-            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
             break;
           case 4:
-            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
             break;
           case 5:
-            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
             break;
           }
 
@@ -651,7 +652,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(nch);
       // write floating point values directly as float (32 bit)
       for(i=0; i<5; i++)
-        memcpy(&(((R5_RPMSG_TYPE*)data)->data[2+i]), dblp+i, sizeof(u32));
+        memcpy(&(((R5_RPMSG_TYPE*)data)->data[2+i]), xp+i, sizeof(u32));
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
@@ -1879,7 +1880,8 @@ int main()
     return status;
     }
 
-  
+  LPRINTF("Starting main loop\n\r");
+
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
