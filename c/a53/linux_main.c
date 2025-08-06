@@ -97,7 +97,8 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)priv;   // avoid warning on unused parameter
 
   u32 cmd, d;
-  int nch;
+  int nch, i;
+  double *dblp;
 
   gIncomingRpmsgs++;
 
@@ -253,6 +254,44 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[2]), &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
       memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[0]), &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
       memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+
+    // readback MIMO matrix row
+    case RPMSGCMD_READ_MATRIX_ROW:
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((d<0)||(d>5))
+        return RPMSG_ERR_PARAM;
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch<1)||(nch>4))
+        return RPMSG_ERR_PARAM;
+
+      switch(d)
+          {
+          case 0:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            break;
+          case 1:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            break;
+          case 2:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            break;
+          case 3:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            break;
+          case 4:
+            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            break;
+          case 5:
+            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            break;
+          }
+
+      // read floating point values directly as float (32 bit)
+      for(i=0; i<5; i++)
+        memcpy(dblp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
+      
       break;
 
 

@@ -1650,6 +1650,194 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
 
 //-------------------------------------------------------------------
 
+void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  char *p;
+  int matrixindex, matrixrow, i;
+  float x;
+  double *dblp;
+  int numbytes, rpmsglen, status;
+
+  
+  if(rw==SCPI_READ)
+    {
+    // READ: request MIMO matrix row
+
+    // next in line is the matrix name (A to F)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing matrix name\n", SCPI_ERRS);
+      return;
+      }
+    if(strlen(p)!=1)
+      {
+      snprintf(ans, maxlen, "%s: use A to F as matrix name\n", SCPI_ERRS);
+      return;
+      }
+    matrixindex=p[0]-'A';
+    if((matrixindex<0) || (matrixindex>5))
+      {
+      snprintf(ans, maxlen, "%s: use A to F as matrix name\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is matrix row (1 to 4)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing matrix row number\n", SCPI_ERRS);
+      return;
+      }
+    matrixrow=(int)strtol(p, NULL, 10);
+    if(errno!=0 && matrixrow==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid matrix row number\n", SCPI_ERRS);
+      return;
+      }
+    if((matrixrow<1)||(matrixrow>4))
+      {
+      snprintf(ans, maxlen, "%s: matrix row number out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // now send rpmsg to R5 with the request
+
+    // remove stale rpmsgs from queue
+    FlushRpmsg();
+
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    rpmsg_ptr->command = RPMSGCMD_READ_MATRIX_ROW;
+    rpmsg_ptr->data[0] = (u32)(matrixindex);
+    rpmsg_ptr->data[1] = (u32)(matrixrow);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      {
+      snprintf(ans, maxlen, "%s: MATRIX ROW READ rpmsg_send() failed\n", SCPI_ERRS);
+      return;
+      }
+    // now wait for answer
+    status=WaitForRpmsg();
+    switch(status)
+      {
+      case RPMSG_ANSWER_VALID:
+        switch(matrixindex)
+          {
+          case 0:
+            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_A;
+            break;
+          case 1:
+            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_B;
+            break;
+          case 2:
+            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_C;
+            break;
+          case 3:
+            dblp=gCtrlLoopChanConfig[matrixrow-1].input_MISO_D;
+            break;
+          case 4:
+            dblp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_E;
+            break;
+          case 5:
+            dblp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_F;
+            break;
+          }
+        snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
+                    SCPI_OKS,
+                    *dblp, *(dblp+1), *(dblp+2), *(dblp+3), *(dblp+4)
+                );
+        break;
+      case RPMSG_ANSWER_TIMEOUT:
+        snprintf(ans, maxlen, "%s: MATRIX ROW READ timed out\n", SCPI_ERRS);
+        break;
+      case RPMSG_ANSWER_ERR:
+        snprintf(ans, maxlen, "%s: MATRIX ROW READ error\n", SCPI_ERRS);
+        break;
+      }
+    }
+  else
+    {
+    // WRITE: write MIMO matrix row
+    
+    // next in line is the matrix name (A to F)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing matrix name\n", SCPI_ERRS);
+      return;
+      }
+    if(strlen(p)!=1)
+      {
+      snprintf(ans, maxlen, "%s: use A to F as matrix name\n", SCPI_ERRS);
+      return;
+      }
+    matrixindex=p[0]-'A';
+    if((matrixindex<0) || (matrixindex>5))
+      {
+      snprintf(ans, maxlen, "%s: use A to F as matrix name\n", SCPI_ERRS);
+      return;
+      }
+
+    // next in line is matrix row (1 to 4)
+    p=strtok(NULL," ");
+    if(p==NULL)
+      {
+      snprintf(ans, maxlen, "%s: missing matrix row number\n", SCPI_ERRS);
+      return;
+      }
+    matrixrow=(int)strtol(p, NULL, 10);
+    if(errno!=0 && matrixrow==0)
+      {
+      snprintf(ans, maxlen, "%s: invalid matrix row number\n", SCPI_ERRS);
+      return;
+      }
+    if((matrixrow<1)||(matrixrow>4))
+      {
+      snprintf(ans, maxlen, "%s: matrix row number out of range [1..4]\n", SCPI_ERRS);
+      return;
+      }
+
+    // start filling the rpmsg with the integer parameters
+    rpmsg_ptr->command = RPMSGCMD_WRITE_MATRIX_ROW;
+    rpmsg_ptr->data[0] = (u32)(matrixindex);
+    rpmsg_ptr->data[1] = (u32)(matrixrow);
+
+    // now parse floating point coefficients
+
+    for(i=0; i<5; i++)
+      {
+      p=strtok(NULL," ");
+      if(p==NULL)
+        {
+        snprintf(ans, maxlen, "%s: missing %c(%d,%d)\n", SCPI_ERRS, 'A'+matrixindex, matrixrow, i);
+        return;
+        }
+      x=strtof(p, NULL);
+      // error check with float does not work
+      // if(errno!=0 && errno!=EIO && x==0.0F)
+      //   {
+      //   snprintf(ans, maxlen, "%s: invalid %c(%d,%d)\n", SCPI_ERRS, 'A'+matrixindex, matrixrow, i);
+      //   return;
+      //   }
+      // write floating point values directly as float (32 bit)
+      memcpy(&(rpmsg_ptr->data[2+i]), &x, sizeof(u32));
+      }
+
+
+    // everything is ready: send rpmsg to R5
+    rpmsglen=sizeof(R5_RPMSG_TYPE);
+    numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
+    if(numbytes<rpmsglen)
+      snprintf(ans, maxlen, "%s: MATRIX ROW WRITE rpmsg_send() failed\n", SCPI_ERRS);
+    else
+      snprintf(ans, maxlen, "%s\n", SCPI_OKS);
+    }
+
+  }
+
+
+//-------------------------------------------------------------------
+
 void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
@@ -3161,6 +3349,12 @@ void printHelp(int filedes)
   sendback(filedes,"CTRLLOOP {ON|OFF}             : global ON/OFF of control loop;\n");
   sendback(filedes,"                                each channel must be individually enabled/disabled by\n");
   sendback(filedes,"                                the command CTRLLOOP:CH:ENABLE\n");
+  sendback(filedes,"CTRLLOOP:MATRIXROW {A|B|C|D|E|F} <rownum> <val0> <val1> <val2> <val3> <val4>\n");
+  sendback(filedes,"                              : write a row of one of the 6 MIMO matrices (named A to F);\n");
+  sendback(filedes,"                                <rownum> is in range [1..4]; values are floating point\n");
+  sendback(filedes,"CTRLLOOP:MATRIXROW {A|B|C|D|E|F} <rownum> ?\n");
+  sendback(filedes,"                              : retrieves a row of one of the 6 MIMO matrices (named A to F);\n");
+  sendback(filedes,"                                <rownum> is in range [1..4]\n");
   sendback(filedes,"CTRLLOOP:CH:PID:RESET <nch> <instance>\n");
   sendback(filedes,"                              : reset memory of instance <instance> (in range [1..2]) of PID\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4])\n");
@@ -3314,6 +3508,8 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_IIRRESET(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:IIR:COEFF")==0)
     parse_IIRCOEFF(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
+  else if(strcmp(p,"CTRLLOOP:MATRIXROW")==0)
+    parse_MATRIXROW(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"CTRLLOOP:CH:STATE")==0)
     parse_CTRLLOOP_CH_STATE(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"CTRLLOOP:CH:IN_SEL")==0) || (strcmp(p,"CTRLLOOP:CH:IN_SELECT")==0) )

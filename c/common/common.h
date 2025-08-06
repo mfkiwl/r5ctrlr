@@ -88,6 +88,8 @@ typedef    int16_t s16;
 #define RPMSGCMD_READ_PID_INVMEAS          42
 #define RPMSGCMD_WRITE_IIR_COEFF           43
 #define RPMSGCMD_READ_IIR_COEFF            44
+#define RPMSGCMD_WRITE_MATRIX_ROW          45
+#define RPMSGCMD_READ_MATRIX_ROW           46
 
 // R5 application state
 #define R5CTRLR_IDLE     0

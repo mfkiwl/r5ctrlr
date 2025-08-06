@@ -101,7 +101,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 
   u32 cmd, d, d2;
   int i, numbytes, rpmsglen, ret, nch;
-  double dval;
+  double dval, *dblp;
 
   // update the total number of received messages, for debug purposes
   irq_cntr[IPI_CNTR]++;
@@ -530,7 +530,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
       break;
 
-    // read back PID gains
+    // read back IIR coefficients
     case RPMSGCMD_READ_IIR_COEFF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
@@ -560,6 +560,104 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("IIR COEFF READ incomplete answer transmitted.\n\r");
+        return RPMSG_ERR_BUFF_SIZE;
+        }
+      break;
+
+
+    // write MIMO matrix row
+    case RPMSGCMD_WRITE_MATRIX_ROW:
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((d<0)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW matrix index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+
+      switch(d)
+          {
+          case 0:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            break;
+          case 1:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            break;
+          case 2:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            break;
+          case 3:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            break;
+          case 4:
+            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            break;
+          case 5:
+            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            break;
+          }
+
+      // read floating point values directly as float (32 bit)
+      for(i=0; i<5; i++)
+        memcpy(dblp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
+      
+      break;
+
+
+    // read back MIMO matrix row
+    case RPMSGCMD_READ_MATRIX_ROW:
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((d<0)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW matrix index out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW channel out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+
+      switch(d)
+          {
+          case 0:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            break;
+          case 1:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            break;
+          case 2:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            break;
+          case 3:
+            dblp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            break;
+          case 4:
+            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            break;
+          case 5:
+            dblp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            break;
+          }
+
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_MATRIX_ROW;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(d);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(nch);
+      // write floating point values directly as float (32 bit)
+      for(i=0; i<5; i++)
+        memcpy(&(((R5_RPMSG_TYPE*)data)->data[2+i]), dblp+i, sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("MATRIX ROW READ incomplete answer transmitted.\n\r");
         return RPMSG_ERR_BUFF_SIZE;
         }
       break;
