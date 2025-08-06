@@ -1755,8 +1755,7 @@ void InitVars(void)
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
   gWavegenEnable=false;
-  //gCtrlLoopEnable=false;
-  gCtrlLoopEnable=true;  // change me
+  gCtrlLoopEnable=false;
   gRecorderConfig.state=RECORDER_IDLE;
   gRecorderConfig.trig_chan=1;
   gRecorderConfig.mode=RECORDER_SLOPE;
@@ -1785,8 +1784,7 @@ void InitVars(void)
 
     // control loop params
 
-    //gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_DISABLED;
-    gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_ENABLED;  // change me
+    gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_DISABLED;
   
     for(j=0; j<5; j++)
       {
@@ -1806,10 +1804,8 @@ void InitVars(void)
     gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
     gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
 
-    // gCtrlLoopChanConfig[i].inputSelect=i;
-    gCtrlLoopChanConfig[i].inputSelect=4;  // change me
-    //gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
-    gDAC_outputSelect[i]=OUTPUT_SELECT_CTRLR;  // change me
+    gCtrlLoopChanConfig[i].inputSelect=i;
+    gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
   
     for(j=0; j<2; j++)
       {
