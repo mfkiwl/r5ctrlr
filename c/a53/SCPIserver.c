@@ -3307,9 +3307,9 @@ void printHelp(int filedes)
   sendback(filedes,"DAC:CH:OFFSet <nch> <val>     : set/get the offset of DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
-  sendback(filedes,"DAC:CH:OUT_SELECT <nch> {WAVEGEN|CTRLLOOP}\n");
+  sendback(filedes,"DAC:CH:OUT_SELect <nch> {WAVEGEN|CTRLLOOP}\n");
   sendback(filedes,"                              : set the driver of DAC channel <nch> (in range [1..4])\n");
-  sendback(filedes,"DAC:CH:OUT_SELECT?  <nch>     : get the driver of DAC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"DAC:CH:OUT_SELect?  <nch>     : get the driver of DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                answer is {WAVEGEN|CTRLLOOP}\n");
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
@@ -3370,10 +3370,10 @@ void printHelp(int filedes)
   sendback(filedes,"CTRLLOOP:CH:STATE <nch> {ON|OFF}\n");
   sendback(filedes,"                              : enables/disables channel <nch> (in range [1..4]) of the control loop\n");
   sendback(filedes,"CTRLLOOP:CH:STATE? <nch>      : retrieves on/off state of control loop channel <nch> (in range [1..4])\n");
-  sendback(filedes,"CTRLLOOP:CH:IN_SEL <nch> <src>: selects input to control loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"CTRLLOOP:CH:IN_SELect <nch> <src>: selects input to control loop channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <src> = 5 selects the output of the MISO matrix;\n");
   sendback(filedes,"                                <src> = 1..4 selects the corresponding waveform generator channel\n");
-  sendback(filedes,"CTRLLOOP:CH:IN_SEL? <nch>     : retrieves the input to control loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"CTRLLOOP:CH:IN_SELect? <nch>     : retrieves the input to control loop channel <nch> (in range [1..4]);\n");
   sendback(filedes,"CTRLLOOP:CH:PID:Gains <nch> <instance> <Gp> <Gi> <G1d> <G2d> <G_AIW>\n");
   sendback(filedes,"                              : set gains of instance <instance> (in range [1..2]) of PID\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]).\n");
@@ -3483,7 +3483,7 @@ void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *en
     parse_DACCH(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if( (strcmp(p,"DAC:CH:OFFS")==0) || (strcmp(p,"DAC:CH:OFFSET")==0) )
     parse_DACOFFS(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
-  else if(strcmp(p,"DAC:CH:OUT_SELECT")==0)
+  else if( (strcmp(p,"DAC:CH:OUT_SEL")==0) || (strcmp(p,"DAC:CH:OUT_SELECT")==0) )
     parse_DAC_OUT_SELECT(ans, maxlen, rw, endp_ptr, rpmsg_ptr);
   else if(strcmp(p,"ADC")==0)
     parse_READ_ADC(ans, maxlen, rw, endp_ptr, rpmsg_ptr);

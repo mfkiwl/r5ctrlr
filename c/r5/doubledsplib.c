@@ -102,9 +102,9 @@ double PID(double command, double meas, PID_GAINS *coeff)
   // deriv
   // remember to use -meas and not meas when doing the derivative on the process variable
   if(coeff->deriv_on_PV)
-    yd = coeff->G1d * coeff->yi_n1 + G2Dcorr*(-act - coeff->xn1);
+    yd = coeff->G1d * coeff->yd_n1 + G2Dcorr*(-act - coeff->xn1);
   else
-    yd = coeff->G1d * coeff->yi_n1 + G2Dcorr*(   x  - coeff->xn1);
+    yd = coeff->G1d * coeff->yd_n1 + G2Dcorr*(   x  - coeff->xn1);
 
 
   y = yp + yi + yd;
