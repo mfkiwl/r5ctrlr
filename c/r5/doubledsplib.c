@@ -82,11 +82,15 @@ double PID(double command, double meas, PID_GAINS *coeff)
   x=cmd-act;
 
   // input dead band
-  if(fabs(x) <= coeff->in_thr)
+  if((fabs(x) <= coeff->in_thr))
     {
     x=0.;
     // when in dead band, leave the filter decay only in the derivative term (i.e. put G2d=0)
-    G2Dcorr=0.;
+    // if the derivative is on the error node
+    if(coeff->deriv_on_PV)
+      G2Dcorr=(double)(coeff->G2d);
+    else
+      G2Dcorr=0.;
     }
   else
     {
@@ -102,7 +106,7 @@ double PID(double command, double meas, PID_GAINS *coeff)
   // deriv
   // remember to use -meas and not meas when doing the derivative on the process variable
   if(coeff->deriv_on_PV)
-    yd = coeff->G1d * coeff->yd_n1 + G2Dcorr*(-act - coeff->xn1);
+    yd = coeff->G1d * coeff->yd_n1 + G2Dcorr*(-act - coeff->measn1);
   else
     yd = coeff->G1d * coeff->yd_n1 + G2Dcorr*(   x  - coeff->xn1);
 
@@ -118,6 +122,7 @@ double PID(double command, double meas, PID_GAINS *coeff)
 
   // update pipeline
   coeff->xn1   = x;
+  coeff->measn1=-act;
   // anti-windup correction for integral part
   coeff->yi_n1 = yi + (ysat-y)*coeff->G_aiw;
   coeff->yd_n1 = yd;

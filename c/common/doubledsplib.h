@@ -48,6 +48,7 @@ typedef struct
   bool invert_meas;  // invert measured value
   // internal "static" vars
   double xn1;        // x(n-1)
+  double measn1;     // measurement input(n-1)
   double yi_n1;      // integral part at previous step = y_I(n-1)
   double yd_n1;      // derivative part at previous step = y_D(n-1)
   } PID_GAINS;

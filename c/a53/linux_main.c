@@ -604,6 +604,7 @@ void InitVars(void)
       gCtrlLoopChanConfig[i].PID[j].invert_cmd =false;
       gCtrlLoopChanConfig[i].PID[j].invert_meas=false;
       gCtrlLoopChanConfig[i].PID[j].xn1        =0.;
+      gCtrlLoopChanConfig[i].PID[j].measn1     =0.;
       gCtrlLoopChanConfig[i].PID[j].yi_n1      =0.;
       gCtrlLoopChanConfig[i].PID[j].yd_n1      =0.;
 

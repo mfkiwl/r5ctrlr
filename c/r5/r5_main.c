@@ -1730,6 +1730,7 @@ void AddTimeToTable(int theindex, double thetime)
 void ResetPID(int chan, int instance)
   {
   gCtrlLoopChanConfig[chan].PID[instance].xn1        =0.;
+  gCtrlLoopChanConfig[chan].PID[instance].measn1     =0.;
   gCtrlLoopChanConfig[chan].PID[instance].yi_n1      =0.;
   gCtrlLoopChanConfig[chan].PID[instance].yd_n1      =0.;
   }
@@ -2132,7 +2133,13 @@ int main()
       // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
       // so I just scale and offset at the end, which is clearer
       for(i=0; i<4; i++)
+        {
+        if(g_y[i]>AD3552_MAX_NORMALIZED)
+          g_y[i]=AD3552_MAX_NORMALIZED;
+        else if(g_y[i]<-AD3552_MAX_NORMALIZED)
+          g_y[i]=-AD3552_MAX_NORMALIZED;
         dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+gDAC_offs_cnt[i]+AD3552_OFFS);
+        }
       
       status = WriteDacSamples(0,dacval[0], dacval[1]);
       status = WriteDacSamples(1,dacval[2], dacval[3]);
