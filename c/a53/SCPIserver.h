@@ -92,6 +92,7 @@ void printSamples(int filedes);
 void printHelp(int filedes);
 void parse(char *buf, char *ans, size_t maxlen, int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 void sendback(int filedes, char *s);
+void split_lines(const char *buf, size_t len, int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 int  SCPI_read_from_client(int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr);
 int  startSCPIserver(int *sock_ptr, fd_set *active_fd_set_ptr);
 

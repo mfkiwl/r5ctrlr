@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# this script is not needed any more, as the SCPI server can now parse multiple commands
+# just do:
+# nc 192.168.0.18 8888 < scpiexample.txt
+
 # Check parameters
 if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <file> <host> <port>"

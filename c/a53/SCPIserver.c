@@ -3554,13 +3554,63 @@ void sendback(int filedes, char *s)
 
 //-------------------------------------------------------------------
 
+void split_lines(const char *buf, size_t len, int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
+  {
+  // split incoming message line by line and feed the lines to the parser
+  // beware that a line may be split between successive reads
+
+  static char leftover[SCPI_MAXMSG] = {0};
+  static size_t leftover_len = 0;
+  char answer[SCPI_MAXMSG];
+
+  char temp[SCPI_MAXMSG * 2]; // to hold leftover + current buffer
+  size_t temp_len = 0;
+
+  // Combine leftover with new buffer
+  memcpy(temp, leftover, leftover_len);
+  temp_len = leftover_len;
+  memcpy(temp + temp_len, buf, len);
+  temp_len += len;
+  temp[temp_len] = '\0';
+
+  // Reset leftover
+  leftover_len = 0;
+  leftover[0] = '\0';
+
+  // Process lines
+  char *start = temp;
+  char *newline;
+  while((newline = memchr(start, '\n', temp + temp_len - start)))
+    {
+    *newline = '\0';
+
+    // Pass complete line to callback
+    //fprintf(stderr, "Incoming msg: '%s'(%d)\n", start,start[0]);
+    parse(start, answer, SCPI_MAXMSG, filedes, endp_ptr, rpmsg_ptr);
+    sendback(filedes, answer);
+
+    start = newline + 1;
+    }
+
+  // Store any incomplete line as leftover
+  if(start < temp + temp_len)
+    {
+    leftover_len = temp + temp_len - start;
+    if(leftover_len >= SCPI_MAXMSG)
+      leftover_len = SCPI_MAXMSG - 1; // truncate if too long
+    memcpy(leftover, start, leftover_len);
+    leftover[leftover_len] = '\0';
+    }
+  }
+
+
+//-------------------------------------------------------------------
 int SCPI_read_from_client(int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
-  char buffer[SCPI_MAXMSG+1];    // "+1" to add zero-terminator
-  char answer[SCPI_MAXMSG+1];
+  char buffer[SCPI_MAXMSG];
   int  nbytes;
   
-  nbytes = read(filedes, buffer, SCPI_MAXMSG);
+  nbytes = read(filedes, buffer, SCPI_MAXMSG-1);  // "-1" to leave space for a \0
   if(nbytes < 0)
     {
     // read error
@@ -3575,10 +3625,9 @@ int SCPI_read_from_client(int filedes, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE 
   else
     {
     // data read
-    buffer[nbytes]=0;    // add string zero terminator
-    //fprintf(stderr, "Incoming msg: '%s'\n", buffer);
-    parse(buffer, answer, SCPI_MAXMSG, filedes, endp_ptr, rpmsg_ptr);
-    sendback(filedes, answer);
+    // split it line by line and feed the lines to the parser
+    // beware that a line may be split between successive reads
+    split_lines(buffer, nbytes, filedes, endp_ptr, rpmsg_ptr);
     return 0;
     }
   }

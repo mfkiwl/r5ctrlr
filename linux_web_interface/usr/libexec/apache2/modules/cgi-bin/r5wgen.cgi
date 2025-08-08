@@ -83,7 +83,7 @@ for ch in range(4):
   else:
     ch_conf[ch]['en']='OFF'
 
-  qstr='WAVEGEN:CH:CONFIG? '+str(ch+1)
+  qstr='WAVEGEN:CH:CONFIG? '+str(ch+1)+'\n'
   s.sendall(bytes(qstr,encoding='ascii')) 
   ans=(s.recv(1024)).decode("utf-8")
   tok=ans.split(" ",7)
