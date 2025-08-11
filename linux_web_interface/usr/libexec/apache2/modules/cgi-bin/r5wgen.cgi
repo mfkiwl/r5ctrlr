@@ -61,7 +61,8 @@ s.sendall(b"*STB?\n")
 ans=(s.recv(1024)).decode("utf-8")
 tok=ans.split(" ",2)
 if(tok[0].strip()=="OK:"):
-  if (tok[1].strip()=="WAVEGEN"):
+  stb=int(tok[1])
+  if((stb&0x02) != 0):
     globalEnable=True
   else:
     globalEnable=False
