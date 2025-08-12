@@ -68,7 +68,7 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 #s.connect(("127.0.0.1", 8888))
 s.connect(("192.168.0.18", 8888))
 
-# ---------  first of all, get current config  -------------
+# ---------  get current config from R5  -------------
 
 # ----- get sampling freq
 s.sendall(b"FSAMPL?\n") 
@@ -189,6 +189,16 @@ for ch in range(4):
       ch_conf[ch]["PID"+pidinst+"_G2d"]  = 0.0
       ch_conf[ch]["PID"+pidinst+"_G_aiw"]= 1.0
 
+    # now calculate regular pID gains ki, kd from PID coefficients (kp=Gp)
+    ch_conf[ch]["PID"+pidinst+"_ki"] = ch_conf[ch]["PID"+pidinst+"_Gi"]*2*fsampl
+    R=0.5*(1+ch_conf[ch]["PID"+pidinst+"_G1d"])/(1-ch_conf[ch]["PID"+pidinst+"_G1d"])
+    Gd=(2*R+1)*ch_conf[ch]["PID"+pidinst+"_G2d"]
+    ch_conf[ch]["PID"+pidinst+"_kd"] = Gd/(2*fsampl)
+    # de-warp f_filt
+    fwarp=fsampl/R
+    ch_conf[ch]["PID"+pidinst+"_ffilt"] = fsampl/np.pi*np.arctan(np.pi*fwarp/fsampl)
+    
+    
     qstr='CTRLLOOP:CH:PID:THR? '+str(ch+1)+' '+ pidinst + '\n'
     s.sendall(bytes(qstr,encoding='ascii')) 
     ans=(s.recv(1024)).decode("utf-8")
@@ -319,7 +329,8 @@ for ch in range(4):
   print('    <tr>')
   print(f'      <td>ADC#{ch+1} offset =</td>')
   print('      <td>')
-  print(f'          <input type="number" name="adc_offs{ch+1}" id="adc_offs{ch+1}" value="{ch_conf[ch]["ADCoffs"]}" min="-32768" max="32767" step=1> counts')
+  # offset max is 32768 and not 32767 because we may want to have ADC range=[0,65535] instead of [-32768,32767]
+  print(f'          <input type="number" name="adc_offs{ch+1}" id="adc_offs{ch+1}" value="{ch_conf[ch]["ADCoffs"]}" min="-32768" max="32768" step=1> counts')
   print('      </td>')
   print('    </tr>')
 
@@ -417,40 +428,40 @@ for ch in range(4):
       print('          <option value = "5" ')
       if ch_conf[ch]['cmdsel']==5:
         print('selected')
-      print(' >C,D MISO matrix</option>')
+      print(f' >CH{ch+1}<sub>cmd</sub> MISO matrix</option>')
       print('        </select>')
       print('      </td>')
       print('    </tr>')
 
-    #-------  PID Gp -----------------------------
+    #-------  PID kp -----------------------------
     print('    <tr>')
     print(f'      <td>G<sub>prop</sub> = </td>')
     print('      <td>')
-    print(f'       <input type="number" name="pid{pidinst}_gp_ch{ch+1}" id="pid{pidinst}_gp_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_Gp"]}">')
+    print(f'       <input type="number" name="pid{pidinst}_kp_ch{ch+1}" id="pid{pidinst}_kp_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_Gp"]}">')
     print('      </td>')
     print('    </tr>')
   
-    #-------  PID Gi -----------------------------
+    #-------  PID ki -----------------------------
     print('    <tr>')
     print(f'      <td>G<sub>integr</sub> = </td>')
     print('      <td>')
-    print(f'       <input type="number" name="pid{pidinst}_gi_ch{ch+1}" id="pid{pidinst}_gi_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_Gi"]}">')
+    print(f'       <input type="number" name="pid{pidinst}_ki_ch{ch+1}" id="pid{pidinst}_ki_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_ki"]}">')
     print('      </td>')
     print('    </tr>')
   
-    #-------  PID G1d -----------------------------
+    #-------  PID kd -----------------------------
     print('    <tr>')
-    print(f'      <td>G<sub>deriv,1</sub> = </td>')
+    print(f'      <td>G<sub>deriv</sub> = </td>')
     print('      <td>')
-    print(f'       <input type="number" name="pid{pidinst}_g1d_ch{ch+1}" id="pid{pidinst}_g1d_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_G1d"]}">')
+    print(f'       <input type="number" name="pid{pidinst}_kd_ch{ch+1}" id="pid{pidinst}_kd_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_kd"]}">')
     print('      </td>')
     print('    </tr>')
   
-    #-------  PID G2d -----------------------------
+    #-------  PID F_filter (deriv term) -----------------------------
     print('    <tr>')
-    print(f'      <td>G<sub>deriv,2</sub> = </td>')
+    print(f'      <td>F_filter<sub>deriv</sub> = </td>')
     print('      <td>')
-    print(f'       <input type="number" name="pid{pidinst}_g2d_ch{ch+1}" id="pid{pidinst}_g2d_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_G2d"]}">')
+    print(f'       <input type="number" name="pid{pidinst}_ffilt_ch{ch+1}" id="pid{pidinst}_ffilt_ch{ch+1}" value="{ch_conf[ch]["PID"+pidinst+"_ffilt"]}"> Hz')
     print('      </td>')
     print('    </tr>')
 
@@ -478,31 +489,64 @@ for ch in range(4):
     print('      </td>')
     print('    </tr>')
   
-    #-------  PID derivative on PV -----------------------------
-    print('    <tr>')
-    print(f'      <td>proc.var deriv:</td>')
-    print('      <td>')
-    print(f'        <select name="pid{pidinst}_PVderiv_ch{ch+1}" id = "pid{pidinst}_PVderiv_ch{ch+1}">')
-    if ch_conf[ch]["PID"+pidinst+"_PVderiv"]=="ON" :
-      print('          <option value = "0"         >OFF</option>')
-      print('          <option value = "1" selected>ON</option>')
-    else:
-      print('          <option value = "0" selected>OFF</option>')
-      print('          <option value = "1"         >ON</option>')
-    print('        </select>')
-    print('      </td>')
-    print('    </tr>')
-
-    print('    <tr><td>&nbsp</td></tr>')
-    
+    #-------  extra options for PID#1 only  -----------------------------
     if(pidinst=='1'):
+
+    #-------  PID derivative on PV  -----------------------------
+      print('    <tr>')
+      print(f'      <td>proc.var deriv:</td>')
+      print('      <td>')
+      print(f'        <select name="pid{pidinst}_PVderiv_ch{ch+1}" id = "pid{pidinst}_PVderiv_ch{ch+1}">')
+      if ch_conf[ch]["PID"+pidinst+"_PVderiv"]=="ON" :
+        print('          <option value = "0"         >OFF</option>')
+        print('          <option value = "1" selected>ON</option>')
+      else:
+        print('          <option value = "0" selected>OFF</option>')
+        print('          <option value = "1"         >ON</option>')
+      print('        </select>')
+      print('      </td>')
+      print('    </tr>')
+  
+    #-------  invert cmd  -----------------------------
+      print('    <tr>')
+      print(f'      <td>invert cmd:</td>')
+      print('      <td>')
+      print(f'        <select name="pid{pidinst}_invcmd_ch{ch+1}" id = "pid{pidinst}_invcmd_ch{ch+1}">')
+      if ch_conf[ch]["PID"+pidinst+"_invert_cmd"]=="ON" :
+        print('          <option value = "0"         >OFF</option>')
+        print('          <option value = "1" selected>ON</option>')
+      else:
+        print('          <option value = "0" selected>OFF</option>')
+        print('          <option value = "1"         >ON</option>')
+      print('        </select>')
+      print('      </td>')
+      print('    </tr>')
+  
+    #-------  invert meas  -----------------------------
+      print('    <tr>')
+      print(f'      <td>invert meas:</td>')
+      print('      <td>')
+      print(f'        <select name="pid{pidinst}_invmeas_ch{ch+1}" id = "pid{pidinst}_invmeas_ch{ch+1}">')
+      if ch_conf[ch]["PID"+pidinst+"_invert_meas"]=="ON" :
+        print('          <option value = "0"         >OFF</option>')
+        print('          <option value = "1" selected>ON</option>')
+      else:
+        print('          <option value = "0" selected>OFF</option>')
+        print('          <option value = "1"         >ON</option>')
+      print('        </select>')
+      print('      </td>')
+      print('    </tr>')
+  
+  
+      print('    <tr><td>&nbsp</td></tr>')
+    
       #-------  2 IIR instances  nested inside the two PIDs-----------------------------
       for IIRinst in ['1','2']:  
         print('    <tr>')
-        print('      <td colspan="2">')
+        print(f'      <td>IIR#{IIRinst}: Y(n)=</td>')
+        print('      <td>')
         print('        <div class="fraction">')
         print('          <div class="numerator">')
-        print(f'            IIR#{IIRinst}: Y(n)=')
         print(f'            <input type="number" name="iir{IIRinst}_a0" placeholder="a0" value="{ch_conf[ch]["IIR"+IIRinst+"_A0"]}"> &bull; X(n) +')
         print(f'            <input type="number" name="iir{IIRinst}_a1" placeholder="a1" value="{ch_conf[ch]["IIR"+IIRinst+"_A1"]}"> &bull; X(n-1) +')
         print(f'            <input type="number" name="iir{IIRinst}_a2" placeholder="a2" value="{ch_conf[ch]["IIR"+IIRinst+"_A2"]}"> &bull; X(n-2) -')
@@ -515,6 +559,7 @@ for ch in range(4):
         print('    <tr><td>&nbsp</td></tr>')
 
 
+  print('    <tr><td>&nbsp</td></tr>')
 
   #-------  E,F output MISO matrix -----------------------------
   
@@ -566,7 +611,8 @@ for ch in range(4):
   print('    <tr>')
   print(f'      <td>DAC#{ch+1} offset =</td>')
   print('      <td>')
-  print(f'          <input type="number" name="dac_offs{ch+1}" id="dac_offs{ch+1}" value="{ch_conf[ch]["DACoffs"]}" min="-32768" max="32767" step=1> counts')
+  # offset max is 32768 to mimic the ADC case
+  print(f'          <input type="number" name="dac_offs{ch+1}" id="dac_offs{ch+1}" value="{ch_conf[ch]["DACoffs"]}" min="-32768" max="32768" step=1> counts')
   print('      </td>')
   print('    </tr>')
 
