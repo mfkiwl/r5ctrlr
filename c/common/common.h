@@ -121,9 +121,6 @@ typedef    int16_t s16;
 #define CTRLLOOP_CH_DISABLED 0
 #define CTRLLOOP_CH_ENABLED  1
 
-// DAC output select
-#define OUTPUT_SELECT_WGEN   0
-#define OUTPUT_SELECT_CTRLR  1
 
 // ##########  types  #######################
 

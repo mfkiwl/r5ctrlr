@@ -413,14 +413,13 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
 void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_RPMSG_TYPE *rpmsg_ptr)
   {
   char *p;
-  int nch,slctor;
+  int nch,insel;
   int numbytes, rpmsglen, status;
-  char enblstr[16];
 
   
   if(rw==SCPI_READ)
     {
-    // READ DAC output selector state (control loop/wave generator)
+    // READ: DAC output selector state (control loop/wave generator)
 
     // next in line is the channel number
     p=strtok(NULL," ");
@@ -460,11 +459,7 @@ void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *end
     switch(status)
       {
       case RPMSG_ANSWER_VALID:
-        if(gDAC_outputSelect[nch-1]==OUTPUT_SELECT_CTRLR)
-          strcpy(enblstr,"CTRLLOOP");
-        else
-          strcpy(enblstr,"WAVEGEN");
-        snprintf(ans, maxlen, "%s: %s\n", SCPI_OKS, enblstr);
+        snprintf(ans, maxlen, "%s: %d\n", SCPI_OKS, gDAC_outputSelect[nch-1]+1);
         break;
       case RPMSG_ANSWER_TIMEOUT:
         snprintf(ans, maxlen, "%s: DAC OUT SEL READ timed out\n", SCPI_ERRS);
@@ -473,7 +468,6 @@ void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *end
         snprintf(ans, maxlen, "%s: DAC OUT SEL READ error\n", SCPI_ERRS);
         break;
       }
-
     }
   else
     {
@@ -498,39 +492,36 @@ void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *end
       return;
       }
 
-    // next in line is the selector (WAVEGEN/CTRLLOOP)
+    // next in line is the input selector
     p=strtok(NULL," ");
     if(p==NULL)
       {
-      snprintf(ans, maxlen, "%s: missing WAVEGEN/CTRLLOOP option\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: missing input selector\n", SCPI_ERRS);
       return;
       }
-    if(strcmp(p,"WAVEGEN")==0)
-      slctor=OUTPUT_SELECT_WGEN;
-    else if(strcmp(p,"CTRLLOOP")==0)
-      slctor=OUTPUT_SELECT_CTRLR;
-    else
-      slctor=-1;
-    
-    if(slctor<0)
+    insel=(int)strtol(p, NULL, 10);
+    if(errno!=0 && insel==0)
       {
-      snprintf(ans, maxlen, "%s: use WAVEGEN/CTRLLOOP for DAC out selection\n", SCPI_ERRS);
+      snprintf(ans, maxlen, "%s: invalid input selector\n", SCPI_ERRS);
       return;
       }
-
+    if((insel<1)||(insel>5))
+      {
+      snprintf(ans, maxlen, "%s: input selector out of range [1..5]\n", SCPI_ERRS);
+      return;
+      }
 
     // everything is ready: send rpmsg to R5
     rpmsglen=sizeof(R5_RPMSG_TYPE);
     rpmsg_ptr->command = RPMSGCMD_WRITE_DACOUTSEL;
     rpmsg_ptr->data[0] = (u32)(nch);
-    rpmsg_ptr->data[1] = (u32)(slctor);
+    rpmsg_ptr->data[1] = (u32)(insel);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
       snprintf(ans, maxlen, "%s: DAC OUT SEL WRITE rpmsg_send() failed\n", SCPI_ERRS);
     else
-      snprintf(ans, maxlen, "%s: DAC OUT driver updated\n", SCPI_OKS, nch, p);
+      snprintf(ans, maxlen, "%s: DAC OUT driver updated\n", SCPI_OKS);
     }
-
   }
 
 
@@ -2925,7 +2916,7 @@ void parse_CTRLLOOP_CH_INSEL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
     {
     // WRITE: set control loop channel input selector
 
-    // next in line is the desired ADC channel
+    // next in line is channel number
     p=strtok(NULL," ");
     if(p==NULL)
       {
@@ -3307,9 +3298,11 @@ void printHelp(int filedes)
   sendback(filedes,"DAC:CH:OFFSet <nch> <val>     : set/get the offset of DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
-  sendback(filedes,"DAC:CH:OUT_SELect <nch> {WAVEGEN|CTRLLOOP}\n");
-  sendback(filedes,"                              : set the driver of DAC channel <nch> (in range [1..4])\n");
-  sendback(filedes,"DAC:CH:OUT_SELect?  <nch>     : get the driver of DAC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"CTRLLOOP:CH:OUT_SELect <nch> <src> :\n");
+  sendback(filedes,"                                sets the driver of DAC channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                <src> = 5 selects the output of the E,F MISO matrix;\n");
+  sendback(filedes,"                                <src> = 1..4 selects the corresponding waveform generator channel\n");
+  sendback(filedes,"CTRLLOOP:CH:OUT_SELect? <nch>  : retrieves the driver of the DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                answer is {WAVEGEN|CTRLLOOP}\n");
   sendback(filedes,"ADC?                          : read the values of the 4 ADC channels; note that\n");
   sendback(filedes,"                                the values are updated at every cycle\n");
@@ -3370,10 +3363,11 @@ void printHelp(int filedes)
   sendback(filedes,"CTRLLOOP:CH:STATE <nch> {ON|OFF}\n");
   sendback(filedes,"                              : enables/disables channel <nch> (in range [1..4]) of the control loop\n");
   sendback(filedes,"CTRLLOOP:CH:STATE? <nch>      : retrieves on/off state of control loop channel <nch> (in range [1..4])\n");
-  sendback(filedes,"CTRLLOOP:CH:IN_SELect <nch> <src>: selects input to control loop channel <nch> (in range [1..4]);\n");
-  sendback(filedes,"                                <src> = 5 selects the output of the MISO matrix;\n");
+  sendback(filedes,"CTRLLOOP:CH:IN_SELect <nch> <src>\n");
+  sendback(filedes,"                              : selects input to control loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"                                <src> = 5 selects the output of the C,D MISO matrix;\n");
   sendback(filedes,"                                <src> = 1..4 selects the corresponding waveform generator channel\n");
-  sendback(filedes,"CTRLLOOP:CH:IN_SELect? <nch>     : retrieves the input to control loop channel <nch> (in range [1..4]);\n");
+  sendback(filedes,"CTRLLOOP:CH:IN_SELect? <nch>  : retrieves the input to control loop channel <nch> (in range [1..4]);\n");
   sendback(filedes,"CTRLLOOP:CH:PID:Gains <nch> <instance> <Gp> <Gi> <G1d> <G2d> <G_AIW>\n");
   sendback(filedes,"                              : set gains of instance <instance> (in range [1..2]) of PID\n");
   sendback(filedes,"                                in ctrl loop channel <nch> (in range [1..4]).\n");

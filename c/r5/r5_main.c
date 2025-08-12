@@ -72,7 +72,7 @@ int gTimerIRQoccurred;
 double gFsampl;
 s16    adcval[4];
 u16    dacval[4];
-double g_x[4], g_x_1[4],g_y[4];
+double g_x[4], g_x_1[4],g_ywgen[4],g_ydac[4];
 s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
 int gDAC_outputSelect[4];
 float gADC_gain[4];
@@ -122,11 +122,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     // update all DAC channels with the values requested by linux
     case RPMSGCMD_WRITE_DAC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
-      g_y[0]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
-      g_y[1]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[0]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[1]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
       d=((R5_RPMSG_TYPE*)data)->data[1];
-      g_y[2]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
-      g_y[3]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[2]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[3]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
       break;
 
     // update only one DAC channel with the value requested by linux
@@ -135,7 +135,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       dval=((s16)(d&0x0000FFFF)) / (1.0*AD3552_AMPL);
       nch=(d>>16)&0x0000FFFF;
       if((nch>=1)&&(nch<=4))
-        g_y[nch-1]=dval;
+        g_ydac[nch-1]=dval;
       else
         {
         LPRINTF("RPMSGCMD_WRITE_DACCH index out of range\n\r");
@@ -147,10 +147,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_DAC:
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DAC;
       // need an intermediate cast to s32 for negative numbers
-      ((R5_RPMSG_TYPE*)data)->data[0] = ((((u32)((s32)(round(g_y[1]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
-                                         (((u32)((s32)(round(g_y[0]*AD3552_AMPL))))&0x0000FFFF);
-      ((R5_RPMSG_TYPE*)data)->data[1] = ((((u32)((s32)(round(g_y[3]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
-                                         (((u32)((s32)(round(g_y[2]*AD3552_AMPL))))&0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[0] = ((((u32)((s32)(round(g_ydac[1]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
+                                         (((u32)((s32)(round(g_ydac[0]*AD3552_AMPL))))&0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[1] = ((((u32)((s32)(round(g_ydac[3]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
+                                         (((u32)((s32)(round(g_ydac[2]*AD3552_AMPL))))&0x0000FFFF);
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
@@ -220,8 +220,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         LPRINTF("RPMSGCMD_WRITE_DACOUTSEL index out of range\n\r");
         return RPMSG_ERR_PARAM;
         }
-      
-      gDAC_outputSelect[nch-1]   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACOUTSEL selector out of range\n\r");
+        return RPMSG_ERR_PARAM;
+        }
+
+      gDAC_outputSelect[nch-1]   = d-1;
       break;
     
     // read back DAC out selection
@@ -235,7 +242,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOUTSEL;
       ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
-      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gDAC_outputSelect[nch-1]);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gDAC_outputSelect[nch-1]+1);
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
@@ -1767,7 +1774,8 @@ void InitVars(void)
   for(i=0; i<4; i++)
     {
     g_x[i]=0.;
-    g_y[i]=0.;
+    g_ywgen[i]=0.;
+    g_ydac[i]=0.;
     gADC_offs_cnt[i]=0;
     gADC_gain[i]=1.;
     gDAC_offs_cnt[i]=0;
@@ -1807,7 +1815,7 @@ void InitVars(void)
     gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
 
     gCtrlLoopChanConfig[i].inputSelect=i;
-    gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
+    gDAC_outputSelect[i]=i;
   
     for(j=0; j<2; j++)
       {
@@ -1988,19 +1996,19 @@ int main()
         for(i=0; i<4; i++)
           {
           if(gWavegenChanConfig[i].state==WGEN_CH_STATE_OFF)
-            g_y[i]=0.0;
+            g_ywgen[i]=0.0;
           else
             {
             //channel is enabled
             switch(gWavegenChanConfig[i].type)
               {
               case WGEN_CH_TYPE_DC:
-                g_y[i]=gWavegenChanConfig[i].ampl;
+                g_ywgen[i]=gWavegenChanConfig[i].ampl;
                 break;
 
               case WGEN_CH_TYPE_SINE:
                 // output current phase
-                g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                g_ywgen[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
                 // calculate next phase
                 dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
                 gPhase[i] += dphase;
@@ -2024,7 +2032,7 @@ int main()
                   }
 
                 // output current phase
-                g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                g_ywgen[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
                 // calculate next phase
                 if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
                   {
@@ -2066,6 +2074,8 @@ int main()
                 break;
               }  // switch/case on waveform type
             }  // if channel enabled
+          // DAC output defaults to corresponding wavegen channel
+          g_ydac[i]=g_ywgen[i];
           }  // loop on 4 channels
         }  // waveform generator
 
@@ -2092,7 +2102,7 @@ int main()
             if(gCtrlLoopChanConfig[i].inputSelect >=4)
               cmd=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_C, gCtrlLoopChanConfig[i].input_MISO_D, 4);
             else
-              cmd=g_y[gCtrlLoopChanConfig[i].inputSelect];
+              cmd=g_ywgen[gCtrlLoopChanConfig[i].inputSelect];
             
             loopvar[i]=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_A, gCtrlLoopChanConfig[i].input_MISO_B, 4);
             loopvar[i]=PID(cmd,loopvar[i],&(gCtrlLoopChanConfig[i].PID[0]));
@@ -2109,8 +2119,10 @@ int main()
         // now calculate output channels
         for(i=0; i<4; i++)
           {
-          if(gDAC_outputSelect[i]==OUTPUT_SELECT_CTRLR)
-            g_y[i]=MISO(loopvar, gCtrlLoopChanConfig[i].output_MISO_E, gCtrlLoopChanConfig[i].output_MISO_F, 4);
+          if(gDAC_outputSelect[i]>=4)
+            g_ydac[i]=MISO(loopvar, gCtrlLoopChanConfig[i].output_MISO_E, gCtrlLoopChanConfig[i].output_MISO_F, 4);
+          else
+            g_ydac[i]=g_ywgen[gDAC_outputSelect[i]];
           }
         
         }  // control loop
@@ -2126,7 +2138,7 @@ int main()
       // output to DAC  ----------------------------------------------------------------
 
 
-      // write DACs from values with fullscale = 1 (g_y[i]) into raw (dacval[i])
+      // write DACs from values with fullscale = 1 (g_ydac[i]) into raw (dacval[i])
 
       // DAC AD3552 is offset binary;
       // usual conversion from 2's complement is done inverting the MSB,
@@ -2134,11 +2146,11 @@ int main()
       // so I just scale and offset at the end, which is clearer
       for(i=0; i<4; i++)
         {
-        if(g_y[i]>AD3552_MAX_NORMALIZED)
-          g_y[i]=AD3552_MAX_NORMALIZED;
-        else if(g_y[i]<-AD3552_MAX_NORMALIZED)
-          g_y[i]=-AD3552_MAX_NORMALIZED;
-        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+gDAC_offs_cnt[i]+AD3552_OFFS);
+        if(g_ydac[i]>AD3552_MAX_NORMALIZED)
+          g_ydac[i]=AD3552_MAX_NORMALIZED;
+        else if(g_ydac[i]<-AD3552_MAX_NORMALIZED)
+          g_ydac[i]=-AD3552_MAX_NORMALIZED;
+        dacval[i]=(u16)round(g_ydac[i]*AD3552_AMPL+gDAC_offs_cnt[i]+AD3552_OFFS);
         }
       
       status = WriteDacSamples(0,dacval[0], dacval[1]);

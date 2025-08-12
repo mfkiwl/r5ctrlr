@@ -136,7 +136,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
       
-      gDAC_outputSelect[nch-1] = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gDAC_outputSelect[nch-1] = (int)(((R5_RPMSG_TYPE*)data)->data[1])-1;
       break;
 
     // readback ADC values sent by R5
@@ -589,7 +589,7 @@ void InitVars(void)
     gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
   
     gCtrlLoopChanConfig[i].inputSelect=i;
-    gDAC_outputSelect[i]=OUTPUT_SELECT_WGEN;
+    gDAC_outputSelect[i]=i;
   
     for(j=0; j<2; j++)
       {
