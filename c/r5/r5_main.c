@@ -73,7 +73,9 @@ double gFsampl;
 s16    adcval[4];
 u16    dacval[4];
 double g_x[4], g_x_1[4],g_ywgen[4],g_ydac[4];
-s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+// I need s32 for offset because I need to cover the case offs=-32768, 
+// used to convert the ADC range from [-32768,32767] to [0,65535]
+s32 gADC_offs_cnt[4], gDAC_offs_cnt[4];
 int gDAC_outputSelect[4];
 float gADC_gain[4];
 double g2pi, gPhase[4], gFreq[4];
@@ -163,11 +165,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 
     // update DAC channel offset with the value requested by linux
     case RPMSGCMD_WRITE_DACOFFS:
-      d=((R5_RPMSG_TYPE*)data)->data[0];
-      d2=(s16)(d&0x0000FFFF);
-      nch=(d>>16)&0x0000FFFF;
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=(s32)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((nch>=1)&&(nch<=4))
-        gDAC_offs_cnt[nch-1]=d2;
+        gDAC_offs_cnt[nch-1]=d;
       else
         {
         LPRINTF("RPMSGCMD_WRITE_DACOFFS index out of range\n\r");
@@ -295,11 +296,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
 
     // update ADC channel offset with the value requested by linux
     case RPMSGCMD_WRITE_ADCOFFS:
-      d=((R5_RPMSG_TYPE*)data)->data[0];
-      d2=(s16)(d&0x0000FFFF);
-      nch=(d>>16)&0x0000FFFF;
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=(s32)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((nch>=1)&&(nch<=4))
-        gADC_offs_cnt[nch-1]=d2;
+        gADC_offs_cnt[nch-1]=d;
       else
         {
         LPRINTF("RPMSGCMD_WRITE_ADCOFFS index out of range\n\r");

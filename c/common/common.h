@@ -28,6 +28,7 @@
 
 typedef __uint32_t u32;
 typedef    int16_t s16;
+typedef    int32_t s32;
 
 #define LPRINTF(format, ...) printf(format, ##__VA_ARGS__)
 #endif

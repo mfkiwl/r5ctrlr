@@ -24,7 +24,7 @@ static int ept_deleted = 0;
 int gIncomingRpmsgs;
 
 s16 g_adcval[4], g_dacval[4];
-s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+s32 gADC_offs_cnt[4], gDAC_offs_cnt[4];
 int gDAC_outputSelect[4];
 float gADC_gain[4];
 u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
@@ -127,7 +127,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
-      gDAC_offs_cnt[nch-1] = (s16)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gDAC_offs_cnt[nch-1] = (s32)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
     // readback DAC output selection
@@ -154,7 +154,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         return RPMSG_ERR_PARAM;
-      gADC_offs_cnt[nch-1] = (s16)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gADC_offs_cnt[nch-1] = (s32)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
     // readback ADC gain sent by R5

@@ -41,7 +41,7 @@ extern u32 gFsampl;
 extern int gR5ctrlState;
 extern WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 extern TRIG_CONFIG gRecorderConfig;
-extern s16 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+extern s32 gADC_offs_cnt[4], gDAC_offs_cnt[4];
 extern int gDAC_outputSelect[4];
 extern float gADC_gain[4];
 extern CTRLLOOP_CH_CONFIG gCtrlLoopChanConfig[4];
