@@ -2156,6 +2156,7 @@ int main()
   double       currtimer_us, sigma;
   double       dphase, alpha, dfreq;
   double       cmd, loopvar[4];
+  s32          DACtemp[4];
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -2443,11 +2444,13 @@ int main()
       // so I just scale and offset at the end, which is clearer
       for(i=0; i<4; i++)
         {
-        if(g_ydac[i]>AD3552_MAX_NORMALIZED)
-          g_ydac[i]=AD3552_MAX_NORMALIZED;
-        else if(g_ydac[i]<-AD3552_MAX_NORMALIZED)
-          g_ydac[i]=-AD3552_MAX_NORMALIZED;
-        dacval[i]=(u16)round(g_ydac[i]*AD3552_AMPL+gDAC_offs_cnt[i]+AD3552_OFFS);
+        // FIRST I add the offset, THEN I saturate
+        DACtemp[i]=g_ydac[i]*AD3552_AMPL+gDAC_offs_cnt[i];
+        if(DACtemp[i]>AD3552_MAX)
+          DACtemp[i]=AD3552_MAX;
+        else if(DACtemp[i]<-AD3552_MAX)
+          DACtemp[i]=-AD3552_MAX;
+        dacval[i]=(u16)round(DACtemp[i]+AD3552_OFFS);
         }
       
       status = WriteDacSamples(0,dacval[0], dacval[1]);

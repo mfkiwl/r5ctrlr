@@ -77,6 +77,7 @@
 #define AD3552_OFFS                    (32768.0)
 #define AD3552_FULLSCALE_VOLT          (10.0)
 #define AD3552_MAX_NORMALIZED          (32767.0/32768.0)
+#define AD3552_MAX                     (32767.0)
 
 // ##########  types  #######################
 
