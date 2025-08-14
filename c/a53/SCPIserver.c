@@ -3298,8 +3298,8 @@ void printHelp(int filedes)
   sendback(filedes,"                                <val> is a 16-bit 2's complement integer\n");
   sendback(filedes,"                                in decimal notation\n");
   sendback(filedes,"DAC:CH:OFFSet <nch> <val>     : set/get the offset of DAC channel <nch> (in range [1..4]);\n");
-  sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
-  sendback(filedes,"                                in decimal notation\n");
+  sendback(filedes,"                                <value> is in counts, in range [-32768,+32768] for uniformity\n");
+  sendback(filedes,"                                with the ADC case\n");
   sendback(filedes,"CTRLLOOP:CH:OUT_SELect <nch> <src> :\n");
   sendback(filedes,"                                sets the driver of DAC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <src> = 5 selects the output of the E,F MISO matrix;\n");
@@ -3310,8 +3310,11 @@ void printHelp(int filedes)
   sendback(filedes,"                                the values are updated at every cycle\n");
   sendback(filedes,"                                of the sampling clock\n");
   sendback(filedes,"ADC:CH:OFFSet <nch> <val>     : set/get the offset of ADC channel <nch> (in range [1..4]);\n");
-  sendback(filedes,"                                <value> is in counts, as a 16-bit 2's complement integer\n");
-  sendback(filedes,"                                in decimal notation\n");
+  sendback(filedes,"                                <value> is in counts, in range [-32768,+32768];\n");
+  sendback(filedes,"                                note that +32768 is a valid offset and it can be used to shift\n");
+  sendback(filedes,"                                the ADC range from [-32768,+32767] to [0,65535], which can be\n");
+  sendback(filedes,"                                useful in some cases where normalization is involved\n");
+  sendback(filedes,"                                (e.g. BPM readout)\n");
   sendback(filedes,"ADC:CH:Gain <nch> <val>       : set the gain of ADC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"ADC:CH:Gain? <nch>            : get the gain of ADC channel <nch> (in range [1..4]);\n");
   sendback(filedes,"                                <value> is in floating point\n");
