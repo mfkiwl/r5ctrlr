@@ -671,7 +671,8 @@ void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
     // everything is ready: send rpmsg to R5
     rpmsglen=sizeof(R5_RPMSG_TYPE);
     rpmsg_ptr->command = RPMSGCMD_WRITE_ADCOFFS;
-    rpmsg_ptr->data[0]=((u32)(nch)<<16)&0xFFFF0000 | ((u32)(offs))&0x0000FFFF;
+    rpmsg_ptr->data[0]=(u32)(nch);
+    rpmsg_ptr->data[1]=(u32)(offs);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
       snprintf(ans, maxlen, "%s: ADC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);

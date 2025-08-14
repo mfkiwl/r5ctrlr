@@ -2,7 +2,7 @@
 ctrlloop on
 ###### now set ch1 to relay ADC#2
 CTRLLOOP:CH:STATE 1 on
-dac:ch:out_select 1 ctrlloop
+dac:ch:out_select 1 5
 CTRLLOOP:CH:IN_SELect 1 5
 # set PID1 meas input to 0
 CTRLLOOP:MATRIXROW A 1 0 0 0 0 0
@@ -18,7 +18,7 @@ CTRLLOOP:CH:IIR:COEFF 1 1 1 0 0 0 0
 CTRLLOOP:CH:IIR:COEFF 1 2 1 0 0 0 0
 ###### now setup ctrlloop chan #2
 CTRLLOOP:CH:STATE 2 on
-dac:ch:out_select 2 ctrlloop
+dac:ch:out_select 2 5
 CTRLLOOP:CH:IN_SELect 2 5
 # set PID1 meas input to ADC#2
 CTRLLOOP:MATRIXROW A 2 0 0 1 0 0

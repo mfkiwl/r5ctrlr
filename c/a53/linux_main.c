@@ -12,6 +12,8 @@
 
 #include "linux_main.h"
 
+//#define RPMSG_DEBUG
+
 // ##########  globals  #######################
 
 void *gplatform;
@@ -105,7 +107,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   if(len<sizeof(R5_RPMSG_TYPE))
     {
     LPRINTF("incomplete message received.\n\r");
-    return RPMSG_ERR_BUFF_SIZE;
+    #ifdef RPMSG_DEBUG
+      return RPMSG_ERR_BUFF_SIZE;
+    #else
+      return RPMSG_SUCCESS;
+    #endif
     }
 
   cmd=((R5_RPMSG_TYPE*)data)->command;
@@ -126,7 +132,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_DACOFFS:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_DACOFFS RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       gDAC_offs_cnt[nch-1] = (s32)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
@@ -134,7 +147,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_DACOUTSEL:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_DACOUTSEL RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       gDAC_outputSelect[nch-1] = (int)(((R5_RPMSG_TYPE*)data)->data[1])-1;
       break;
@@ -153,7 +173,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_ADCOFFS:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_ADCOFFS RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       gADC_offs_cnt[nch-1] = (s32)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
@@ -161,7 +188,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_ADCGAIN:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_ADCGAIN RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       // read floating point values directly as float (32 bit)
       memcpy(&(gADC_gain[nch-1]), &(((R5_RPMSG_TYPE*)data)->data[1]), sizeof(u32));
       break;
@@ -180,7 +214,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_WGEN_CH_CONF RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       // read floating point values directly as float (32 bit)
@@ -195,7 +236,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_WGEN_CH_STATE RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       gWavegenChanConfig[nch-1].state   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
@@ -204,7 +252,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_CTRLLOOP_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_CTRLLOOP_CH_STATE RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       gCtrlLoopChanConfig[nch-1].state   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
@@ -213,10 +268,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_CTRLLOOP_CH_INSEL:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_CTRLLOOP_CH_INSEL RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>5))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_CTRLLOOP_CH_INSEL RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       gCtrlLoopChanConfig[nch-1].inputSelect=d-1;
       break;
@@ -225,10 +294,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_PID_GAINS:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_GAINS RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_GAINS RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       // read floating point values directly as float (32 bit)
       memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gp),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
@@ -243,10 +326,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_IIR_COEFF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_IIR_COEFF RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_IIR_COEFF RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       // read floating point values directly as float (32 bit)
       memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[0]), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
@@ -261,10 +358,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_MATRIX_ROW:
       d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((d<0)||(d>5))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_MATRIX_ROW RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_MATRIX_ROW RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
 
       switch(d)
           {
@@ -299,10 +410,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_PID_THR:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_THR RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_THR RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       // read floating point values directly as float (32 bit)
       memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
@@ -313,10 +438,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_PID_PV_DERIV:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_PV_DERIV RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_PV_DERIV RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
 
       gCtrlLoopChanConfig[nch-1].PID[d-1].deriv_on_PV = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
       break;
@@ -325,10 +464,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_PID_INVCMD:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVCMD RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVCMD RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
 
       gCtrlLoopChanConfig[nch-1].PID[d-1].invert_cmd = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
       break;
@@ -337,10 +490,24 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_PID_INVMEAS:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVMEAS RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVMEAS RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
 
       gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
       break;
@@ -354,7 +521,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_TRIG_CFG:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_TRIG_CFG RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       else
         gRecorderConfig.trig_chan=nch;
       

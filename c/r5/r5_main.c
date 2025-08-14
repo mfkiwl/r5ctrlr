@@ -14,6 +14,7 @@
 
 //#define PROFILE
 //#define PRINTOUT
+//#define RPMSG_DEBUG
 
 // ##########  globals  #######################
 
@@ -114,7 +115,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   if(len<rpmsglen)
     {
     LPRINTF("incomplete message received.\n\r");
-    return RPMSG_ERR_BUFF_SIZE;
+    #ifdef RPMSG_DEBUG
+      return RPMSG_ERR_BUFF_SIZE;
+    #else
+      return RPMSG_SUCCESS;
+    #endif
     }
 
   cmd=((R5_RPMSG_TYPE*)data)->command;
@@ -141,7 +146,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       else
         {
         LPRINTF("RPMSGCMD_WRITE_DACCH index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -159,7 +168,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("DAC READBACK incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -172,7 +185,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       else
         {
         LPRINTF("RPMSGCMD_WRITE_DACOFFS index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -182,7 +199,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_DACOFFS index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOFFS;
@@ -194,7 +215,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("DAC OFFS READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -209,7 +234,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("ADC READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -219,14 +248,22 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_DACOUTSEL index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
 
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>5))
         {
         LPRINTF("RPMSGCMD_WRITE_DACOUTSEL selector out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
 
       gDAC_outputSelect[nch-1]   = d-1;
@@ -238,7 +275,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_DACOUTSEL index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOUTSEL;
@@ -250,7 +291,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("DAC OUT SEL READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -260,13 +305,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>5))
         {
         LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL selector out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gCtrlLoopChanConfig[nch-1].inputSelect=d-1;
@@ -278,7 +331,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_CTRLLOOP_CH_INSEL index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_CTRLLOOP_CH_INSEL;
@@ -290,7 +347,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("CTRLLOOP IN_SEL READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -303,7 +364,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       else
         {
         LPRINTF("RPMSGCMD_WRITE_ADCOFFS index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -313,7 +378,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_ADCOFFS index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADCOFFS;
@@ -325,7 +394,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("ADC OFFS READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -338,7 +411,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       else
         {
         LPRINTF("RPMSGCMD_WRITE_ADCGAIN index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -348,7 +425,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_ADCGAIN index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADCGAIN;
@@ -361,7 +442,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("ADC GAIN READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -381,7 +466,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("FSAMPL READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -430,12 +519,20 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_RESET_PID chan index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_RESET_PID instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       ResetPID(nch-1,d-1);
       break;
@@ -447,12 +544,20 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_RESET_IIR chan index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_RESET_IIR instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       ResetIIR(nch-1,d-1);
       break;
@@ -463,13 +568,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_GAINS channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_GAINS instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       // read floating point values directly as float (32 bit)
@@ -486,13 +599,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_PID_GAINS channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_READ_PID_GAINS instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_GAINS;
@@ -510,7 +631,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("PID GAINS READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -521,13 +646,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_IIR_COEFF channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_WRITE_IIR_COEFF instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       // read floating point values directly as float (32 bit)
@@ -544,13 +677,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_IIR_COEFF channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_READ_IIR_COEFF instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_IIR_COEFF;
@@ -568,7 +709,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("IIR COEFF READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -579,13 +724,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((d<0)||(d>5))
         {
         LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW matrix index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
 
       switch(d)
@@ -623,13 +776,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((d<0)||(d>5))
         {
         LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW matrix index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
 
       switch(d)
@@ -666,7 +827,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("MATRIX ROW READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -677,13 +842,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_THR channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_THR instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       // read floating point values directly as float (32 bit)
@@ -698,13 +871,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_PID_THR channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_READ_PID_THR instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_THR;
@@ -719,7 +900,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("PID THR READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -730,13 +915,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_PV_DERIV channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_PV_DERIV instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gCtrlLoopChanConfig[nch-1].PID[d-1].deriv_on_PV = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
@@ -749,13 +942,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_PID_PV_DERIV channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_READ_PID_PV_DERIV instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_PV_DERIV;
@@ -768,7 +969,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("PID PV_DERIV READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -779,13 +984,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_INVCMD channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_INVCMD instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gCtrlLoopChanConfig[nch-1].PID[d-1].invert_cmd = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
@@ -798,13 +1011,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_PID_INVCMD channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_READ_PID_INVCMD instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_INVCMD;
@@ -817,7 +1038,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("PID INV_CMD READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -828,13 +1053,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_INVMEAS channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_WRITE_PID_INVMEAS instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
@@ -847,13 +1080,21 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_PID_INVMEAS channel out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
       if((d<1)||(d>2))
         {
         LPRINTF("RPMSGCMD_READ_PID_INVMEAS instance out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_INVMEAS;
@@ -866,7 +1107,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("PID INV_MEAS READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -889,7 +1134,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("STATE READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -899,7 +1148,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_WGEN_CH_CONF index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
@@ -927,7 +1180,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_WGEN_CH_CONF index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_CONF;
@@ -945,7 +1202,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("WGEN CH CONF READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
     
@@ -955,7 +1216,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_WGEN_CH_STATE index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       // reset sweep counters every time we get this command
@@ -976,7 +1241,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_WGEN_CH_STATE index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_STATE;
@@ -988,7 +1257,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("WGEN CH STATE READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -998,7 +1271,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_STATE index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
 
       // reset filters inside control loop channel
@@ -1016,7 +1293,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_CTRLLOOP_CH_STATE index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_CTRLLOOP_CH_STATE;
@@ -1028,7 +1309,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("CTRLLOOP CH STATE READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -1053,7 +1338,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("TRIG READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -1063,7 +1352,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_TRIG_CFG index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gRecorderConfig.trig_chan=nch;
@@ -1092,7 +1385,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("TRIG setup READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
