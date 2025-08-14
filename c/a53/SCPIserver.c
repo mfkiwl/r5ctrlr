@@ -206,6 +206,7 @@ void parse_DAC(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5_R
       p=strtok(NULL," ");
       if(p==NULL)
         break;
+      errno=0;
       n=(int)strtol(p, NULL, 10);
       if(errno!=0 && n==0)
         {
@@ -259,6 +260,7 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
       snprintf(ans, maxlen, "%s: missing DAC channel\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -277,6 +279,7 @@ void parse_DACCH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R5
       snprintf(ans, maxlen, "%s: missing DAC value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     dacvalue=(int)strtol(p, NULL, 10);
     if(errno!=0 && dacvalue==0)
       {
@@ -316,6 +319,7 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing DAC channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -371,6 +375,7 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing DAC channel\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -389,6 +394,7 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     offs=(int)strtol(p, NULL, 10);
     if(errno!=0 && offs==0)
       {
@@ -399,7 +405,7 @@ void parse_DACOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
     rpmsglen=sizeof(R5_RPMSG_TYPE);
     rpmsg_ptr->command = RPMSGCMD_WRITE_DACOFFS;
     rpmsg_ptr->data[0]=(u32)(nch);
-    rpmsg_ptr->data[0]=(u32)(offs);
+    rpmsg_ptr->data[1]=(u32)(offs);
     numbytes= rpmsg_send(endp_ptr, rpmsg_ptr, rpmsglen);
     if(numbytes<rpmsglen)
       snprintf(ans, maxlen, "%s: DAC:CH:OFFS WRITE rpmsg_send() failed\n", SCPI_ERRS);
@@ -429,6 +435,7 @@ void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *end
       snprintf(ans, maxlen, "%s: missing DAC channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -481,6 +488,7 @@ void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *end
       snprintf(ans, maxlen, "%s: missing DAC channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -500,6 +508,7 @@ void parse_DAC_OUT_SELECT(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *end
       snprintf(ans, maxlen, "%s: missing input selector\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     insel=(int)strtol(p, NULL, 10);
     if(errno!=0 && insel==0)
       {
@@ -589,6 +598,7 @@ void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing ADC channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -644,6 +654,7 @@ void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing ADC channel\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -662,6 +673,7 @@ void parse_ADCOFFS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing OFFSET value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     offs=(int)strtol(p, NULL, 10);
     if(errno!=0 && offs==0)
       {
@@ -703,6 +715,7 @@ void parse_ADCGAIN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing ADC channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -757,6 +770,7 @@ void parse_ADCGAIN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing ADC channel\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -775,6 +789,7 @@ void parse_ADCGAIN(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, 
       snprintf(ans, maxlen, "%s: missing GAIN value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     g=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && g==0.0F)
@@ -845,6 +860,7 @@ void parse_FSAMPL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr, R
       snprintf(ans, maxlen, "%s: missing sampling frequency\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     fs=(u32)strtol(p, NULL, 10);
     if(errno!=0 && fs==0)
       {
@@ -935,6 +951,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1008,6 +1025,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1059,6 +1077,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing amplitude\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1079,6 +1098,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         snprintf(ans, maxlen, "%s: missing offset\n", SCPI_ERRS);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // 0.0 is an acceptable value for the offset;
       // error check with float does not work
@@ -1105,6 +1125,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         snprintf(ans, maxlen, "%s: missing frequency\n", SCPI_ERRS);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1129,6 +1150,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         snprintf(ans, maxlen, "%s: missing end frequency\n", SCPI_ERRS);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1153,6 +1175,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
         snprintf(ans, maxlen, "%s: missing sweep time\n", SCPI_ERRS);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1201,6 +1224,7 @@ void parse_WAVEGEN_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *e
       snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1268,6 +1292,7 @@ void parse_WAVEGEN_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *e
       snprintf(ans, maxlen, "%s: missing WAVEGEN channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1389,6 +1414,7 @@ void do_FilterReset(int filtertype, char *ans, size_t maxlen, int rw, RPMSG_ENDP
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1408,6 +1434,7 @@ void do_FilterReset(int filtertype, char *ans, size_t maxlen, int rw, RPMSG_ENDP
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -1472,6 +1499,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1491,6 +1519,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -1551,6 +1580,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1570,6 +1600,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -1598,6 +1629,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
         snprintf(ans, maxlen, "%s: missing A%d\n", SCPI_ERRS, i);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1618,6 +1650,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
         snprintf(ans, maxlen, "%s: missing B%d\n", SCPI_ERRS, i);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1681,6 +1714,7 @@ void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing matrix row number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     matrixrow=(int)strtol(p, NULL, 10);
     if(errno!=0 && matrixrow==0)
       {
@@ -1777,6 +1811,7 @@ void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing matrix row number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     matrixrow=(int)strtol(p, NULL, 10);
     if(errno!=0 && matrixrow==0)
       {
@@ -1804,6 +1839,7 @@ void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
         snprintf(ans, maxlen, "%s: missing %c(%d,%d)\n", SCPI_ERRS, 'A'+matrixindex, matrixrow, i);
         return;
         }
+      errno=0;
       x=strtof(p, NULL);
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1849,6 +1885,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1868,6 +1905,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -1928,6 +1966,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -1947,6 +1986,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -1973,6 +2013,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing Gp\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -1990,6 +2031,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing Gi\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -2007,6 +2049,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing G1D\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -2024,6 +2067,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing G2D\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -2041,6 +2085,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
       snprintf(ans, maxlen, "%s: missing G_AIW\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -2085,6 +2130,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2104,6 +2150,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2161,6 +2208,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2180,6 +2228,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2206,6 +2255,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing input dead band\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -2223,6 +2273,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing output saturation\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     x=strtof(p, NULL);
     // error check with float does not work
     // if(errno!=0 && errno!=EIO && x==0.0F)
@@ -2266,6 +2317,7 @@ void parse_PID_PVDERIV(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2285,6 +2337,7 @@ void parse_PID_PVDERIV(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2341,6 +2394,7 @@ void parse_PID_PVDERIV(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2360,6 +2414,7 @@ void parse_PID_PVDERIV(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2428,6 +2483,7 @@ void parse_PID_INVCMD(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_pt
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2447,6 +2503,7 @@ void parse_PID_INVCMD(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_pt
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2503,6 +2560,7 @@ void parse_PID_INVCMD(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_pt
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2522,6 +2580,7 @@ void parse_PID_INVCMD(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_pt
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2590,6 +2649,7 @@ void parse_PID_INVMEAS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2609,6 +2669,7 @@ void parse_PID_INVMEAS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2665,6 +2726,7 @@ void parse_PID_INVMEAS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing CTRLLOOP channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2684,6 +2746,7 @@ void parse_PID_INVMEAS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_p
       snprintf(ans, maxlen, "%s: missing instance value\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     instance=(int)strtol(p, NULL, 10);
     if(errno!=0 && instance==0)
       {
@@ -2752,6 +2815,7 @@ void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing control loop channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2805,6 +2869,7 @@ void parse_CTRLLOOP_CH_STATE(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing control loop channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2873,6 +2938,7 @@ void parse_CTRLLOOP_CH_INSEL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing control loop channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2925,6 +2991,7 @@ void parse_CTRLLOOP_CH_INSEL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing control loop channel\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     nch=(int)strtol(p, NULL, 10);
     if(errno!=0 && nch==0)
       {
@@ -2944,6 +3011,7 @@ void parse_CTRLLOOP_CH_INSEL(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       snprintf(ans, maxlen, "%s: missing input selector\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     insel=(int)strtol(p, NULL, 10);
     if(errno!=0 && insel==0)
       {
@@ -3142,6 +3210,7 @@ void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
       snprintf(ans, maxlen, "%s: missing TRIG channel number\n", SCPI_ERRS);
       return;
       }
+    errno=0;
     trigch=(int)strtol(p, NULL, 10);
     if(errno!=0 && trigch==0)
       {
@@ -3219,12 +3288,14 @@ void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
         snprintf(ans, maxlen, "%s: missing TRIG level\n", SCPI_ERRS);
         return;
         }
+      errno=0;
       lvl=strtof(p, NULL);
-      if(errno!=0 && errno!=EIO && lvl==0.0F)
-        {
-        snprintf(ans, maxlen, "%s: invalid TRIG level\n", SCPI_ERRS);
-        return;
-        }
+      // error check with float does not work
+      //if(errno!=0 && errno!=EIO && lvl==0.0F)
+      //  {
+      //  snprintf(ans, maxlen, "%s: invalid TRIG level\n", SCPI_ERRS);
+      //  return;
+      //  }
   
       // write floating point values directly as float (32 bit)
       memcpy(&(rpmsg_ptr->data[3]), &lvl, sizeof(u32));
