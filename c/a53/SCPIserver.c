@@ -996,7 +996,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
             break;
           }
 
-        snprintf(ans, maxlen, "%s: %s %g %g %g %g %g\n",
+        snprintf(ans, maxlen, "%s: %s %.8g %.8g %.8g %.8g %.8g\n",
                     SCPI_OKS,
                     wtypestr,
                     gWavegenChanConfig[nch-1].ampl,
@@ -1104,7 +1104,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
       // error check with float does not work
       // if(errno!=0 && errno!=EIO && x==0.0F)
       //   {
-      //   snprintf(ans, maxlen, "%s: invalid offset (%g; errno=%d)\n", SCPI_ERRS,x,errno);
+      //   snprintf(ans, maxlen, "%s: invalid offset (%.8g; errno=%d)\n", SCPI_ERRS,x,errno);
       //   return;
       //   }
       }
@@ -1113,7 +1113,7 @@ void parse_WAVEGEN_CH_CONFIG(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *
 
     // write floating point values directly as float (32 bit)
     memcpy(&(rpmsg_ptr->data[3]), &x, sizeof(u32));
-    //LPRINTF(">>%g<<\n",*((float*)&(rpmsg_ptr->data[3])));
+    //LPRINTF(">>%.8g<<\n",*((float*)&(rpmsg_ptr->data[3])));
 
 
     // next in line is f1 (for SINE and SWEEP waveforms, not for DC)
@@ -1552,7 +1552,7 @@ void parse_IIRCOEFF(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
     switch(status)
       {
       case RPMSG_ANSWER_VALID:
-        snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
+        snprintf(ans, maxlen, "%s: %.8g %.8g %.8g %.8g %.8g\n",
                     SCPI_OKS,
                     gCtrlLoopChanConfig[nch-1].IIR[instance-1].a[0],
                     gCtrlLoopChanConfig[nch-1].IIR[instance-1].a[1],
@@ -1768,7 +1768,7 @@ void parse_MATRIXROW(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
             xp=gCtrlLoopChanConfig[matrixrow-1].output_MISO_F;
             break;
           }
-        snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
+        snprintf(ans, maxlen, "%s: %.8g %.8g %.8g %.8g %.8g\n",
                     SCPI_OKS,
                     *xp, *(xp+1), *(xp+2), *(xp+3), *(xp+4)
                 );
@@ -1938,7 +1938,7 @@ void parse_PIDGAINS(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr,
     switch(status)
       {
       case RPMSG_ANSWER_VALID:
-        snprintf(ans, maxlen, "%s: %g %g %g %g %g\n",
+        snprintf(ans, maxlen, "%s: %.8g %.8g %.8g %.8g %.8g\n",
                     SCPI_OKS,
                     gCtrlLoopChanConfig[nch-1].PID[instance-1].Gp,
                     gCtrlLoopChanConfig[nch-1].PID[instance-1].Gi,
@@ -2183,7 +2183,7 @@ void parse_PIDTHRESH(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
     switch(status)
       {
       case RPMSG_ANSWER_VALID:
-        snprintf(ans, maxlen, "%s: %g %g\n",
+        snprintf(ans, maxlen, "%s: %.8g %.8g\n",
                     SCPI_OKS,
                     gCtrlLoopChanConfig[nch-1].PID[instance-1].in_thr,
                     gCtrlLoopChanConfig[nch-1].PID[instance-1].out_sat
@@ -3187,7 +3187,7 @@ void parse_TRIGSETUP(char *ans, size_t maxlen, int rw, RPMSG_ENDP_TYPE *endp_ptr
               strcpy(slopestr,"FALLING");
               break;
             }
-          snprintf(ans, maxlen, "%s: %d %s %s %g\n", SCPI_OKS, 
+          snprintf(ans, maxlen, "%s: %d %s %s %.8g\n", SCPI_OKS, 
                                      gRecorderConfig.trig_chan, modestr, slopestr, gRecorderConfig.level);
           }
         break;
