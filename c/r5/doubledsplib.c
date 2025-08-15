@@ -65,7 +65,7 @@ double MISO(double *x, float *a, float *b, int dim)
 
 double PID(double command, double meas, PID_GAINS *coeff)
   {
-  double x, xd, yp, yi, yd, y, ysat, G2Dcorr, cmd, act;
+  double x, xd, yp, yi, yd, y, ysat, yisat, G2Dcorr, cmd, act;
 
   // invert inputs if needed
   if(coeff->invert_cmd)
@@ -102,6 +102,12 @@ double PID(double command, double meas, PID_GAINS *coeff)
   
   // integr
   yi = coeff->yi_n1 + coeff->Gi*(x + coeff->xn1);
+  // integr term saturation and anti windup
+  yisat=yi;
+  if(yisat >= coeff->out_sat)
+    yisat=coeff->out_sat;
+  else if(yisat <= -coeff->out_sat)
+    yisat=-coeff->out_sat;
 
   // deriv
   // remember to use -meas and not meas when doing the derivative on the process variable
@@ -111,7 +117,7 @@ double PID(double command, double meas, PID_GAINS *coeff)
     yd = coeff->G1d * coeff->yd_n1 + G2Dcorr*(   x  - coeff->xn1);
 
 
-  y = yp + yi + yd;
+  y = yp + yisat + yd;
 
   // output saturation
   ysat=y;
@@ -124,7 +130,7 @@ double PID(double command, double meas, PID_GAINS *coeff)
   coeff->xn1   = x;
   coeff->measn1=-act;
   // anti-windup correction for integral part
-  coeff->yi_n1 = yi + (ysat-y)*coeff->G_aiw;
+  coeff->yi_n1 = yi + (yisat-yi)*coeff->G_aiw;
   coeff->yd_n1 = yd;
 
   return ysat;

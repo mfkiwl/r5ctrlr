@@ -26,7 +26,7 @@ print('<html>')
 print('<head>')
 print('  <table>')
 print('    <tr>')
-print('      <td> <a href="/index.html"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
+print('      <td> <a href="/cgi-bin/index.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
 print('      <H2>Waveform Generator Facility</H2>')
@@ -40,8 +40,8 @@ print('<body>')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect(("127.0.0.1", 8888))
-#s.connect(("192.168.0.18", 8888))
+#s.connect(("127.0.0.1", 8888))
+s.connect(("192.168.0.18", 8888))
 
 
 

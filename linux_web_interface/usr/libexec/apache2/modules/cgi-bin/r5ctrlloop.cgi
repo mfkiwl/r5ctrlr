@@ -51,7 +51,7 @@ print('  </style>')
 print('')
 print('  <table>')
 print('    <tr>')
-print('      <td> <a href="/index.html"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
+print('      <td> <a href="/cgi-bin/index.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
 print('      <H2>Real Time Controller Facility</H2>')
@@ -432,6 +432,23 @@ for name in arguments.keys():
     matindx=name[6]
     ch=int(name[-1])-1
     ch_conf[ch]["IIR"+iirinst+"_"+matname+matindx] =float(arguments[name][0])
+
+  # --------  PID reset  ----------
+  elif fnmatch.fnmatch(name,'resetPID[12]ch[1234]'):
+    pidinst=name[8]
+    pidch=name[-1]
+    qstr='CTRLLOOP:CH:PID:RESET '+pidch+' '+pidinst+'\n'
+    s.sendall(bytes(qstr,encoding='ascii')) 
+    ans=(s.recv(1024)).decode("utf-8")
+
+  # --------  IIR reset  ----------
+  elif fnmatch.fnmatch(name,'resetIIR[12]ch[1234]'):
+    iirinst=name[8]
+    iirch=name[-1]
+    qstr='CTRLLOOP:CH:IIR:RESET '+iirch+' '+iirinst+'\n'
+    s.sendall(bytes(qstr,encoding='ascii')) 
+    ans=(s.recv(1024)).decode("utf-8")
+
 
 
 # ---------       now workout the low-level coefficients          ------------
@@ -910,12 +927,45 @@ for ch in range(4):
   print(f'     <button type="submit" name="updconf{ch+1}" id="updconf{ch+1}" value=1> update CH#{ch+1} configuration</button>')
   print('    </td></tr>')
 
+  print('</form>')
+
+  #-------  PID and IIR Reset buttons  -----------------------------
+  print('    <tr>')
+  print('      <td colspan="2">')
+
+  print('      <table><tr>')
+  print('      <td>')
+  print('        <form>')
+  print(f'       <button type="submit" name="resetPID1ch{ch+1}" id="resetPID1ch{ch+1}" value=1>Reset PID#1</button>')
+  print('        </form>')
+  print('      </td>')
+  print('      <td>')
+  print('        <form>')
+  print(f'       <button type="submit" name="resetIIR1ch{ch+1}" id="resetIIR1ch{ch+1}" value=1>Reset IIR#1</button>')
+  print('        </form>')
+  print('      </td>')
+  print('      <td>')
+  print('        <form>')
+  print(f'       <button type="submit" name="resetIIR2ch{ch+1}" id="resetIIR2ch{ch+1}" value=1>Reset IIR#2</button>')
+  print('        </form>')
+  print('      </td>')
+  print('      <td>')
+  print('        <form>')
+  print(f'       <button type="submit" name="resetPID2ch{ch+1}" id="resetPID2ch{ch+1}" value=1>Reset PID#2</button>')
+  print('        </form>')
+  print('      </td>')
+  print('      </tr></table>')
+  
+  print('      </td>')
+  print('    </tr>')
+
+
   #-------  last spacer  -----------------------------
   if(ch==3):
     print('    <tr><td colspan="2" class="divider"><hr /></td></tr>')
   print('  </table>')
 
-  print('</form>')
+  #print('</form>')
 
 print('<br><br>')
 print('</body>')
