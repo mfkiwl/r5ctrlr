@@ -857,6 +857,12 @@ for ch in range(4):
         print('    </tr>')
         print('    <tr><td>&nbsp</td></tr>')
 
+      print('<tr><td colspan="2">')
+      print('Please remember that <a href="/iircoeff.html">here</a> you can find an utility ')
+      print('to calcultate the IIR coefficients for common cases')
+      print('</td></tr>')
+      print('<tr><td>&nbsp</td></tr>')
+
 
   print('    <tr><td>&nbsp</td></tr>')
 
