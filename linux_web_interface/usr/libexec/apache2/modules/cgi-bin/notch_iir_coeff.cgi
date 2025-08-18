@@ -30,7 +30,7 @@ print('    <tr>')
 print('      <td> <a href="/cgi-bin/index.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
-print('      <H2>Lowpass IIR coefficients calculation utility</H2>')
+print('      <H2>Notch IIR coefficients calculation utility</H2>')
 print('      </td>')
 print('    </tr>')
 print('  </table>')
@@ -114,12 +114,15 @@ if( calccoeff and queryok ):
   # prewarp
   w0=2.*fsampl*np.tan(w0/(2.*fsampl))
   # coefficient worked out using a bilinear transformation = Tustin
-  beta0= 4*fsampl**2/w0**2 + zeta*4*fsampl/w0 + 1
-  beta1= 2-8*fsampl**2/w0**2
-  beta2= 4*fsampl**2/w0**2 - zeta*4*fsampl/w0 + 1
-  A0=1./beta0
-  A1=2./beta0
-  A2=1./beta0
+  alpha0= 1.+4.*fsampl**2/w0**2
+  alpha1= 2.-8.*fsampl**2/w0**2
+  alpha2= alpha0
+  beta0= 1+ 4.*zeta*fsampl/w0 + 4.*fsampl**2/w0**2
+  beta1= alpha1
+  beta2= 1- 4.*zeta*fsampl/w0 + 4.*fsampl**2/w0**2
+  A0= alpha0/beta0
+  A1= alpha1/beta0
+  A2= alpha2/beta0
   B1= beta1/beta0
   B2= beta2/beta0
 
@@ -217,10 +220,15 @@ print('<br><br>')
 
 # --------------------  now display html page  -----------------------
 
-print('General form of lowpass transfer function:<br><br>')
-print('<img width="180" height="60" src="/lp_formula.png" alt="Low pass formula in frequency domain">')
+print('General form of notch transfer function:<br><br>')
+print('<img width="180" height="40" src="/notch_formula.png" alt="Notch formula in frequency domain">')
+print('<br><br>')
+print('I remember how the damping factor &zeta; is related to the quality factor Q and the -3dB bandwidth ')
+print('(i.e. the bandwidth where the amplitude is -3dB, not 3dB from max attenuation):')
+print('<br><br>')
+print('<img width="120" height="40" src="/notch_zeta.png" alt="dF/F0=2zeta=1/Q">')
 print('<br>')
-print('<img width="560" height="420" src="/lp.png" alt="Typical low pass Bode diagram for different &zeta;">')
+print('<img width="560" height="420" src="/notch.png" alt="Typical low pass Bode diagram for different &zeta;">')
 print('<br>')
 print(f'Controller sampling frequency is {fsampl} Hz.')
 print('<br>')
@@ -238,7 +246,7 @@ print('  <table>')
 
 #-------  f0  -----------------------------
 print('    <tr>')
-print('      <td>Cutoff frequency f<sub>0</sub> (=&omega;<sub>0</sub>/2&pi;) =</td>')
+print('      <td>Notch frequency f<sub>0</sub> (=&omega;<sub>0</sub>/2&pi;) =</td>')
 print('      <td>')
 print(f'          <input type="number" name="f0" id="f0" value="{f0}" min="1" max="{fsampl/2.}" step="any"> Hz')
 print('      </td>')
