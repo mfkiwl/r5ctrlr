@@ -24,9 +24,11 @@ ACQ_WAIT_COMPLETION=2
 ACQ_DOWNLOAD=3
 
 # defaults
-sweep_ch=4
-in_ch=4
-out_ch=1
+sweep_ch=2
+in_ch=2
+out_ch=3
+ampl=0.8;
+offs=0.;
 fstart=100
 fstop=4000
 acq_state=ACQ_IDLE
@@ -67,6 +69,14 @@ for name in arguments.keys():
   # -------- new DAC sweep channel
   elif name=='sweep_ch':
     sweep_ch=int(arguments[name][0])
+
+  # -------- new sweep amplitude
+  elif name=='ampl':
+    ampl=float(arguments[name][0])
+
+  # -------- new sweep offset
+  elif name=='offs':
+    offs=float(arguments[name][0])
 
   # -------- new ADC sys in channel
   elif name=='in_ch':
@@ -190,6 +200,22 @@ print(f'          <input type="number" name="sweep_ch" id="sweep_ch" value={swee
 print('      </td>')
 print('    </tr>')
 
+#-------  sweep amplitude  -----------------------------
+print('    <tr>')
+print('      <td>Sweep amplitude (range [0,1]):</td>')
+print('      <td>')
+print(f'       <input type="number" name="ampl" id="ampl" value={ampl} size="5em" min="0.0" max="+1.0" step="any">')
+print('      </td>')
+print('    </tr>')
+
+#-------  sweep offset  -----------------------------
+print('    <tr>')
+print('      <td>Sweep offset (range [-1,1]):</td>')
+print('      <td>')
+print(f'       <input type="number" name="offs" id="offs" value={offs} size="5em" min="-1.0" max="+1.0" step="any">')
+print('      </td>')
+print('    </tr>')
+
 #-------  IN Chan  -----------------------------
 print('    <tr>')
 print('      <td>System IN (ADC) channel:</td>')
@@ -209,6 +235,8 @@ print('    </tr>')
 
 print('  </table>')
 
+print('<br>If you want to set ADC and DAC offset/gain corrections, please use ')
+print('<a href="/cgi-bin/r5ctrlloop.cgi">the real time controller page</a><br>')
 print(f'  <br>Acquisition time in this configuration is {acqtime:.3f} sec<br><br>')
 
 print(f'  <button type="submit" name="acqstate" id="acqstate" value={ACQ_START}> Acquire </button>')
@@ -235,7 +263,7 @@ elif acq_state==ACQ_START :
     print('<br>Error programming the waveform generator (step 1)<br>')
 
   # by default sweep is done at 80% full scale, no offset
-  cmd_s='WAVEGEN:CH:CONFIG '+str(sweep_ch)+' SWEEP 0.8 0 '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
+  cmd_s='WAVEGEN:CH:CONFIG '+str(sweep_ch)+' SWEEP '+str(ampl)+' '+str(offs)+' '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
   # print('<br>'+cmd_s+'<br>')
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
