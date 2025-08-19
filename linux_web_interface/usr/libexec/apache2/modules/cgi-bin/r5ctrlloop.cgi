@@ -504,7 +504,7 @@ if( (ch_to_update>=1) and (ch_to_update<=4) ):
 
 
   for iirinst in ["1","2"]:
-    qstr='CTRLLOOP:CH:IIR:COEFF '+str(ch+1)+iirinst+' '                     \
+    qstr='CTRLLOOP:CH:IIR:COEFF '+str(ch+1)+' '+iirinst+' '                     \
                                  +str(ch_conf[ch]["IIR"+iirinst+"_A0"])+' ' \
                                  +str(ch_conf[ch]["IIR"+iirinst+"_A1"])+' ' \
                                  +str(ch_conf[ch]["IIR"+iirinst+"_A2"])+' ' \
