@@ -30,7 +30,7 @@ print('    <tr>')
 print('      <td> <a href="/cgi-bin/index.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
-print('      <H2>Lowpass IIR coefficients calculation utility</H2>')
+print('      <H2>Integrator IIR coefficients calculation utility</H2>')
 print('      </td>')
 print('    </tr>')
 print('  </table>')
@@ -75,7 +75,6 @@ arguments = urllib.parse.parse_qs(query_string)
 
 #sensible defaults
 f0=fsampl/10
-zeta=0.71
 ch=1
 iirinst=1
 calccoeff=False
@@ -85,8 +84,6 @@ for name in arguments.keys():
 
   if name=='f0':
     f0=float(arguments[name][0])
-  elif name=='zeta':
-    zeta=float(arguments[name][0])
   elif name=='ch':
     i=int(arguments[name][0])
     if((i>=1)and(i<=4)):
@@ -110,18 +107,15 @@ for name in arguments.keys():
 # ---------  and write back the updated channel config to the R5  ------------
 
 if( calccoeff and queryok ):
-  w0=2*np.pi*f0
+  w0=2.*np.pi*f0
   # prewarp
   w0=2.*fsampl*np.tan(w0/(2.*fsampl))
   # coefficient worked out using a bilinear transformation = Tustin
-  beta0= 4*fsampl**2/w0**2 + zeta*4*fsampl/w0 + 1
-  beta1= 2-8*fsampl**2/w0**2
-  beta2= 4*fsampl**2/w0**2 - zeta*4*fsampl/w0 + 1
-  A0=1./beta0
-  A1=2./beta0
-  A2=1./beta0
-  B1= beta1/beta0
-  B2= beta2/beta0
+  A0=w0/(2.*fsampl)
+  A1=A0
+  A2=0.
+  B1=-1.
+  B2=0.
 
   qstr='CTRLLOOP:CH:IIR:COEFF '+str(ch)+' '+str(iirinst)+' '        \
                                +str(A0)+' '+str(A1)+' '+str(A2)+' ' \
@@ -217,10 +211,10 @@ print('<br><br>')
 
 # --------------------  now display html page  -----------------------
 
-print('General form of lowpass transfer function:<br><br>')
-print('<img width="180" height="60" src="/lp_formula.png" alt="Low pass formula in frequency domain">')
+print('General form of integrator transfer function:<br><br>')
+print('<img width="110" height="40" src="/integr_formula.png" alt="Integrator formula in frequency domain">')
 print('<br>')
-print('<img width="560" height="420" src="/lp.png" alt="Typical low pass Bode diagram for different &zeta;">')
+print('<img width="560" height="420" src="/integr.png" alt="Typical integrator Bode diagram">')
 print('<br>')
 print(f'Controller sampling frequency is {fsampl} Hz.')
 print('<br>')
@@ -238,19 +232,12 @@ print('  <table>')
 
 #-------  f0  -----------------------------
 print('    <tr>')
-print('      <td>Cutoff frequency f<sub>0</sub> (=&omega;<sub>0</sub>/2&pi;) =</td>')
+print('      <td>Integrator 0dB frequency f<sub>0</sub> (=&omega;<sub>0</sub>/2&pi;) =</td>')
 print('      <td>')
 print(f'          <input type="number" name="f0" id="f0" value="{f0}" min="1" max="{fsampl/2.}" step="any"> Hz')
 print('      </td>')
 print('    </tr>')
 
-#-------  zeta  -----------------------------
-print('    <tr>')
-print('      <td>&zeta; =</td>')
-print('      <td>')
-print(f'          <input type="number" name="zeta" id="zeta" value="{zeta}" step="any">')
-print('      </td>')
-print('    </tr>')
 
 #-------  Channel number  -----------------------------
 print('    <tr>')
