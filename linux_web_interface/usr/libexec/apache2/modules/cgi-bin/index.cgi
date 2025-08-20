@@ -40,8 +40,8 @@ print('<body>')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#s.connect(("127.0.0.1", 8888))
-s.connect(("192.168.0.18", 8888))
+s.connect(("127.0.0.1", 8888))
+#s.connect(("192.168.0.18", 8888))
 
 
 # ------------------  do the changes requested by the GET form query string  --------------------

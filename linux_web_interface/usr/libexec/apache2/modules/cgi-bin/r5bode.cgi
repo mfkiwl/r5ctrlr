@@ -16,6 +16,12 @@ MAXSAMPLES=16383
 MAXCNTS=32768.
 # seconds to wait before checking again for end of acquisition
 TRIG_IDLE_RETRY_DELAY_SEC=1
+FFT_WINDOWS=["None (rect)","Bartlett","Blackman","Hamming","Hanning"]
+WINDOW_NONE=0
+WINDOW_BARTLETT=1
+WINDOW_BLACKMAN=2
+WINDOW_HAMMING=3
+WINDOW_HANNING=4
 
 # acquisition state machine
 ACQ_IDLE=0
@@ -31,6 +37,7 @@ ampl=0.8;
 offs=0.;
 fstart=100
 fstop=4000
+fftwin=WINDOW_NONE
 acq_state=ACQ_IDLE
 
 # Ensure this works even if DISPLAY is not set (e.g., on servers)
@@ -39,8 +46,8 @@ matplotlib.use('Agg')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#s.connect(("127.0.0.1", 8888))
-s.connect(("192.168.0.18", 8888))
+s.connect(("127.0.0.1", 8888))
+#s.connect(("192.168.0.18", 8888))
 
 
 # ---------  get the query string of the GET form  ------------
@@ -93,6 +100,10 @@ for name in arguments.keys():
   # -------- new fstop
   elif name=='fstop':
     fstop=int(arguments[name][0])
+
+  # -------- new FFT window
+  elif name=='fftwin':
+    fftwin=int(arguments[name][0])
 
   #------------ start a new acquisition -------------
   elif name=='acqstate':
@@ -232,6 +243,19 @@ print(f'          <input type="number" name="out_ch" id="out_ch" value={out_ch} 
 print('      </td>')
 print('    </tr>')
 
+#-------  FFT window  -----------------------------
+print('    <tr>')
+print('      <td>FFT window:</td>')
+print('      <td>')
+print('        <select name="fftwin" id = "fftwin">')
+for i in range(len(FFT_WINDOWS)):
+  print(f'          <option value = "{i}" ')
+  if( i==fftwin ):
+    print('selected="selected"')
+  print(f'>{FFT_WINDOWS[i]}</option>')
+print('        </select>')
+print('      </td>')
+print('    </tr>')
 
 print('  </table>')
 
@@ -374,10 +398,21 @@ elif acq_state==ACQ_DOWNLOAD:
   outv=np.array([sublist[out_ch-1] for sublist in samples])/MAXCNTS
   df=(fsampl*1.0)/samplenum;
   freqv=np.arange(0,int(samplenum/2))*df
-  # fin =np.fft.fft( inv*np.hanning(len(inv)))
-  # fout=np.fft.fft(outv*np.hanning(len(outv)))
-  fin =np.fft.fft( inv)
-  fout=np.fft.fft(outv)
+  if(fftwin==WINDOW_NONE):
+    fin =np.fft.fft( inv)
+    fout=np.fft.fft(outv)
+  elif(fftwin==WINDOW_BARTLETT):
+    fin =np.fft.fft( inv*np.bartlett(len(inv)))
+    fout=np.fft.fft(outv*np.bartlett(len(outv)))
+  elif(fftwin==WINDOW_BLACKMAN):
+    fin =np.fft.fft( inv*np.blackman(len(inv)))
+    fout=np.fft.fft(outv*np.blackman(len(outv)))
+  elif(fftwin==WINDOW_HAMMING):
+    fin =np.fft.fft( inv*np.hamming(len(inv)))
+    fout=np.fft.fft(outv*np.hamming(len(outv)))
+  elif(fftwin==WINDOW_HANNING):
+    fin =np.fft.fft( inv*np.hanning(len(inv)))
+    fout=np.fft.fft(outv*np.hanning(len(outv)))
   h=np.divide(fout,fin)
   mag=20*np.log10(np.absolute(h))
   mag2=mag[:int(samplenum/2)]
