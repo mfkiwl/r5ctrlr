@@ -1,15 +1,15 @@
 #!/usr/bin/python
 
 import socket
-import select
+#import select
 import os
 import urllib.parse
-import time
-from datetime import datetime
+#import time
+#from datetime import datetime
 import numpy as np
-import matplotlib.pyplot as plt
-import io
-import base64
+#import matplotlib.pyplot as plt
+#import io
+#import base64
 import fnmatch
 
 # constants
@@ -559,7 +559,7 @@ if( (ch_to_update>=1) and (ch_to_update<=4) ):
 # --------------------  now display html page  -----------------------
 
 
-print('<img src="/ctrlloop.png" alt="Control loop block diagram">')
+print('<img src="/ctrlloop.png" width="800" alt="Control loop block diagram">')
 
 print('<form action="" method="GET" >')
 

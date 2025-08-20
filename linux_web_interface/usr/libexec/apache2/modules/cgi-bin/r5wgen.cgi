@@ -1,15 +1,15 @@
 #!/usr/bin/python
 
 import socket
-import select
+#import select
 import os
 import urllib.parse
-import time
-from datetime import datetime
-import numpy as np
-import matplotlib.pyplot as plt
-import io
-import base64
+#import time
+#from datetime import datetime
+#import numpy as np
+#import matplotlib.pyplot as plt
+#import io
+#import base64
 import fnmatch
 
 # constants

@@ -7,9 +7,9 @@ import urllib.parse
 import time
 from datetime import datetime
 import numpy as np
-import matplotlib.pyplot as plt
-import io
-import base64
+#import matplotlib.pyplot as plt
+#import io
+#import base64
 
 # constants
 MAXSAMPLES=16383
@@ -39,10 +39,6 @@ fstart=100
 fstop=4000
 fftwin=WINDOW_NONE
 acq_state=ACQ_IDLE
-
-# Ensure this works even if DISPLAY is not set (e.g., on servers)
-import matplotlib
-matplotlib.use('Agg')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -424,6 +420,14 @@ elif acq_state==ACQ_DOWNLOAD:
   # print(f'mag2 size: {np.size(mag2)}<br>')
 
   # -------------  plot  ------------------
+  
+  # Ensure this works even if DISPLAY is not set (e.g., on servers)
+  #import matplotlib
+  #matplotlib.use('Agg')
+
+  import matplotlib.pyplot as plt
+  import io
+  import base64
   
   #------  Bode mag  ---------------
   plt.figure(figsize=(6, 4))
