@@ -7,6 +7,12 @@ import urllib.parse
 import time
 from datetime import datetime
 import numpy as np
+
+# don't import matplotlib here: on A53/petalinux it's slow;
+# importing it here jeopardizes interactivity with the user;
+# I import it later in the code, right before plotting,
+# when the user is already waiting on the message 'downloading...'
+#
 #import matplotlib.pyplot as plt
 #import io
 #import base64
@@ -259,7 +265,10 @@ print('<br>If you want to set ADC and DAC offset/gain corrections, please use ')
 print('<a href="/cgi-bin/r5ctrlloop.cgi">the real time controller page</a><br>')
 print(f'  <br>Acquisition time in this configuration is {acqtime:.3f} sec<br><br>')
 
-print(f'  <button type="submit" name="acqstate" id="acqstate" value={ACQ_START}> Acquire </button>')
+print(f'  <button type="submit" name="acqstate" id="acqstate" value={ACQ_START}')
+if((acq_state==ACQ_START) or (acq_state==ACQ_WAIT_COMPLETION)):
+  print(' disabled')
+print('> Acquire </button>')
 
 print('</form>')
 
