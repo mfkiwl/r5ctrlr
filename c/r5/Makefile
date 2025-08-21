@@ -24,6 +24,9 @@ _OBJ_LOC = $(patsubst %,$(OBJ_DIR)/%,$(OBJ_LOCAL))
 _OBJ_COM = $(patsubst %,$(OBJ_DIR)/%,$(OBJ_COMMON))
 _OBJ = $(_OBJ_LOC) $(_OBJ_COM)
 
+DEP=$(_OBJ:%.o=%.d)
+-include $(DEP)
+
 all: bindir $(TARGET)
 default: all
 
@@ -31,10 +34,10 @@ bindir:
 	@mkdir -p $(OBJ_DIR)
 
 $(_OBJ_LOC): $(OBJ_DIR)/%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -c $< -o $@
 
 $(_OBJ_COM): $(OBJ_DIR)/%.o: $(COMMON_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -c $< -o $@
 
 $(TARGET): $(_OBJ)
 	$(CC) $^ $(LDFLAGS) -o $@
