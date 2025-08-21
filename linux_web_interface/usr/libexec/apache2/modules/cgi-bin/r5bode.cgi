@@ -7,15 +7,27 @@ import urllib.parse
 import time
 from datetime import datetime
 import numpy as np
-import matplotlib.pyplot as plt
-import io
-import base64
+
+# don't import matplotlib here: on A53/petalinux it's slow;
+# importing it here jeopardizes interactivity with the user;
+# I import it later in the code, right before plotting,
+# when the user is already waiting on the message 'downloading...'
+#
+#import matplotlib.pyplot as plt
+#import io
+#import base64
 
 # constants
 MAXSAMPLES=16383
 MAXCNTS=32768.
 # seconds to wait before checking again for end of acquisition
 TRIG_IDLE_RETRY_DELAY_SEC=1
+FFT_WINDOWS=["None (rect)","Bartlett","Blackman","Hamming","Hanning"]
+WINDOW_NONE=0
+WINDOW_BARTLETT=1
+WINDOW_BLACKMAN=2
+WINDOW_HAMMING=3
+WINDOW_HANNING=4
 
 # acquisition state machine
 ACQ_IDLE=0
@@ -24,16 +36,15 @@ ACQ_WAIT_COMPLETION=2
 ACQ_DOWNLOAD=3
 
 # defaults
-sweep_ch=4
-in_ch=4
-out_ch=1
+sweep_ch=2
+in_ch=2
+out_ch=3
+ampl=0.8;
+offs=0.;
 fstart=100
 fstop=4000
+fftwin=WINDOW_NONE
 acq_state=ACQ_IDLE
-
-# Ensure this works even if DISPLAY is not set (e.g., on servers)
-import matplotlib
-matplotlib.use('Agg')
 
 # --------- open a connection to r5ctrlr SCPI server ----------
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -68,6 +79,14 @@ for name in arguments.keys():
   elif name=='sweep_ch':
     sweep_ch=int(arguments[name][0])
 
+  # -------- new sweep amplitude
+  elif name=='ampl':
+    ampl=float(arguments[name][0])
+
+  # -------- new sweep offset
+  elif name=='offs':
+    offs=float(arguments[name][0])
+
   # -------- new ADC sys in channel
   elif name=='in_ch':
     in_ch=int(arguments[name][0])
@@ -83,6 +102,10 @@ for name in arguments.keys():
   # -------- new fstop
   elif name=='fstop':
     fstop=int(arguments[name][0])
+
+  # -------- new FFT window
+  elif name=='fftwin':
+    fftwin=int(arguments[name][0])
 
   #------------ start a new acquisition -------------
   elif name=='acqstate':
@@ -140,7 +163,7 @@ if ((acq_state!=ACQ_IDLE) and (acq_state!=ACQ_DOWNLOAD)) :
 
 print('  <table>')
 print('    <tr>')
-print('      <td> <a href="/index.html"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
+print('      <td> <a href="/cgi-bin/index.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
 print('      <H2>Bode Facility</H2>')
@@ -190,6 +213,22 @@ print(f'          <input type="number" name="sweep_ch" id="sweep_ch" value={swee
 print('      </td>')
 print('    </tr>')
 
+#-------  sweep amplitude  -----------------------------
+print('    <tr>')
+print('      <td>Sweep amplitude (range [0,1]):</td>')
+print('      <td>')
+print(f'       <input type="number" name="ampl" id="ampl" value={ampl} size="5em" min="0.0" max="+1.0" step="any">')
+print('      </td>')
+print('    </tr>')
+
+#-------  sweep offset  -----------------------------
+print('    <tr>')
+print('      <td>Sweep offset (range [-1,1]):</td>')
+print('      <td>')
+print(f'       <input type="number" name="offs" id="offs" value={offs} size="5em" min="-1.0" max="+1.0" step="any">')
+print('      </td>')
+print('    </tr>')
+
 #-------  IN Chan  -----------------------------
 print('    <tr>')
 print('      <td>System IN (ADC) channel:</td>')
@@ -206,12 +245,30 @@ print(f'          <input type="number" name="out_ch" id="out_ch" value={out_ch} 
 print('      </td>')
 print('    </tr>')
 
+#-------  FFT window  -----------------------------
+print('    <tr>')
+print('      <td>FFT window:</td>')
+print('      <td>')
+print('        <select name="fftwin" id = "fftwin">')
+for i in range(len(FFT_WINDOWS)):
+  print(f'          <option value = "{i}" ')
+  if( i==fftwin ):
+    print('selected="selected"')
+  print(f'>{FFT_WINDOWS[i]}</option>')
+print('        </select>')
+print('      </td>')
+print('    </tr>')
 
 print('  </table>')
 
+print('<br>If you want to set ADC and DAC offset/gain corrections, please use ')
+print('<a href="/cgi-bin/r5ctrlloop.cgi">the real time controller page</a><br>')
 print(f'  <br>Acquisition time in this configuration is {acqtime:.3f} sec<br><br>')
 
-print(f'  <button type="submit" name="acqstate" id="acqstate" value={ACQ_START}> Acquire </button>')
+print(f'  <button type="submit" name="acqstate" id="acqstate" value={ACQ_START}')
+if((acq_state==ACQ_START) or (acq_state==ACQ_WAIT_COMPLETION)):
+  print(' disabled')
+print('> Acquire </button>')
 
 print('</form>')
 
@@ -227,7 +284,7 @@ elif acq_state==ACQ_START :
   # print(datetime.now())
   # print(' : configuring...')
 
-  cmd_s='WAVEGEN:CH_ENABLE '+str(sweep_ch)+' OFF\n'
+  cmd_s='WAVEGEN:CH:STATE '+str(sweep_ch)+' OFF\n'
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
   tok=ans.split(" ",2)
@@ -235,7 +292,7 @@ elif acq_state==ACQ_START :
     print('<br>Error programming the waveform generator (step 1)<br>')
 
   # by default sweep is done at 80% full scale, no offset
-  cmd_s='WAVEGEN:CH_CONFIG '+str(sweep_ch)+' SWEEP 0.8 0 '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
+  cmd_s='WAVEGEN:CH:CONFIG '+str(sweep_ch)+' SWEEP '+str(ampl)+' '+str(offs)+' '+str(fstart)+' '+str(fstop)+' '+str(acqtime)+'\n'
   # print('<br>'+cmd_s+'<br>')
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
@@ -264,7 +321,7 @@ elif acq_state==ACQ_START :
   if tok[0].strip()=='ERR:':
     print('<br>Error programming the waveform generator (step 5)<br>')
 
-  cmd_s='WAVEGEN:CH_ENABLE '+str(sweep_ch)+' SINGLE\n'
+  cmd_s='WAVEGEN:CH:STATE '+str(sweep_ch)+' SINGLE\n'
   s.sendall(cmd_s.encode('ascii')) 
   ans=(s.recv(1024)).decode('utf-8')
   tok=ans.split(" ",2)
@@ -346,10 +403,21 @@ elif acq_state==ACQ_DOWNLOAD:
   outv=np.array([sublist[out_ch-1] for sublist in samples])/MAXCNTS
   df=(fsampl*1.0)/samplenum;
   freqv=np.arange(0,int(samplenum/2))*df
-  # fin =np.fft.fft( inv*np.hanning(len(inv)))
-  # fout=np.fft.fft(outv*np.hanning(len(outv)))
-  fin =np.fft.fft( inv)
-  fout=np.fft.fft(outv)
+  if(fftwin==WINDOW_NONE):
+    fin =np.fft.fft( inv)
+    fout=np.fft.fft(outv)
+  elif(fftwin==WINDOW_BARTLETT):
+    fin =np.fft.fft( inv*np.bartlett(len(inv)))
+    fout=np.fft.fft(outv*np.bartlett(len(outv)))
+  elif(fftwin==WINDOW_BLACKMAN):
+    fin =np.fft.fft( inv*np.blackman(len(inv)))
+    fout=np.fft.fft(outv*np.blackman(len(outv)))
+  elif(fftwin==WINDOW_HAMMING):
+    fin =np.fft.fft( inv*np.hamming(len(inv)))
+    fout=np.fft.fft(outv*np.hamming(len(outv)))
+  elif(fftwin==WINDOW_HANNING):
+    fin =np.fft.fft( inv*np.hanning(len(inv)))
+    fout=np.fft.fft(outv*np.hanning(len(outv)))
   h=np.divide(fout,fin)
   mag=20*np.log10(np.absolute(h))
   mag2=mag[:int(samplenum/2)]
@@ -361,6 +429,14 @@ elif acq_state==ACQ_DOWNLOAD:
   # print(f'mag2 size: {np.size(mag2)}<br>')
 
   # -------------  plot  ------------------
+  
+  # Ensure this works even if DISPLAY is not set (e.g., on servers)
+  #import matplotlib
+  #matplotlib.use('Agg')
+
+  import matplotlib.pyplot as plt
+  import io
+  import base64
   
   #------  Bode mag  ---------------
   plt.figure(figsize=(6, 4))

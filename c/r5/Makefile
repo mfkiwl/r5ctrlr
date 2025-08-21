@@ -1,6 +1,6 @@
-OBJ_LOCAL = r5_main.o max7301.o ad3552.o adaq23876.o
+OBJ_LOCAL = r5_main.o max7301.o ad3552.o adaq23876.o doubledsplib.o
 COMMON_DIR = ../common
-OBJ_COMMON = platform.o rproc.o rsc_table.o sample_shmem.o
+OBJ_COMMON = platform.o rproc.o rsc_table.o sample_shmem.o 
 TARGET = R5app.elf
 PLATFORM_PATH = /xilinxworks/ZCU102/v2024.2/r5ctrlr/r5ctrlr/hardware/vitis-workspace/ZCU102-r5ctrlr
 
@@ -24,6 +24,9 @@ _OBJ_LOC = $(patsubst %,$(OBJ_DIR)/%,$(OBJ_LOCAL))
 _OBJ_COM = $(patsubst %,$(OBJ_DIR)/%,$(OBJ_COMMON))
 _OBJ = $(_OBJ_LOC) $(_OBJ_COM)
 
+DEP=$(_OBJ:%.o=%.d)
+-include $(DEP)
+
 all: bindir $(TARGET)
 default: all
 
@@ -31,10 +34,10 @@ bindir:
 	@mkdir -p $(OBJ_DIR)
 
 $(_OBJ_LOC): $(OBJ_DIR)/%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -c $< -o $@
 
 $(_OBJ_COM): $(OBJ_DIR)/%.o: $(COMMON_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -c $< -o $@
 
 $(TARGET): $(_OBJ)
 	$(CC) $^ $(LDFLAGS) -o $@

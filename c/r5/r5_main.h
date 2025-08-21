@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <math.h>
+#include <stdbool.h>
 #include <openamp/open_amp.h>
 #include <metal/alloc.h>
 #include "common.h"
@@ -40,6 +42,7 @@
 #include "max7301.h"
 #include "ad3552.h"
 #include "adaq23876.h"
+#include "doubledsplib.h"
 
 //---------- openamp stuff  ------------------------
 #define IPI_DEV_NAME         "poll_dev"
@@ -116,6 +119,8 @@ void SetupExceptions(void);
 static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index);
 void ResetTimeTable(void);
 void AddTimeToTable(int theindex, double thetime);
+void ResetPID(int chan, int instance);
+void ResetIIR(int chan, int instance);
 void InitVars(void);
 int main(void);
 

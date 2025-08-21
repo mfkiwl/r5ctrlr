@@ -14,6 +14,7 @@
 
 //#define PROFILE
 //#define PRINTOUT
+//#define RPMSG_DEBUG
 
 // ##########  globals  #######################
 
@@ -68,15 +69,24 @@ static XTmrCtr_Config *gTimerConfig;
 float gTimerIRQlatency, gMaxLatency;
 int gTimerIRQoccurred;
 
+// ADC sampling and waveform generation
 double gFsampl;
-u16    dacval[4];
 s16    adcval[4];
-double g_x[4], g_x_1[4],g_y[4];
+u16    dacval[4];
+double g_x[4], g_x_1[4],g_ywgen[4],g_ydac[4];
+// I need s32 for offset because I need to cover the case offs=-32768, 
+// used to convert the ADC range from [-32768,32767] to [0,65535]
+s32 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+int gDAC_outputSelect[4];
+float gADC_gain[4];
 double g2pi, gPhase[4], gFreq[4];
-int gR5ctrlState;
+bool gWavegenEnable, gCtrlLoopEnable;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
 unsigned long gTotSweepSamples[4], gCurSweepSamples[4], curShmSampleNum;
+
+CTRLLOOP_CH_CONFIG gCtrlLoopChanConfig[4];
+
 
 // table of execution times for profiling;
 // entries are <x>, <x^2>, min, max, N_entries
@@ -92,9 +102,10 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)src;    // avoid warning on unused parameter
   (void)ept;    // avoid warning on unused parameter
 
-  u32 cmd, d;
+  u32 cmd, d, d2;
   int i, numbytes, rpmsglen, ret, nch;
   double dval;
+  float *xp;
 
   // update the total number of received messages, for debug purposes
   irq_cntr[IPI_CNTR]++;
@@ -104,7 +115,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   if(len<rpmsglen)
     {
     LPRINTF("incomplete message received.\n\r");
-    return RPMSG_ERR_BUFF_SIZE;
+    #ifdef RPMSG_DEBUG
+      return RPMSG_ERR_BUFF_SIZE;
+    #else
+      return RPMSG_SUCCESS;
+    #endif
     }
 
   cmd=((R5_RPMSG_TYPE*)data)->command;
@@ -114,11 +129,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     // update all DAC channels with the values requested by linux
     case RPMSGCMD_WRITE_DAC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
-      g_y[0]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
-      g_y[1]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[0]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[1]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
       d=((R5_RPMSG_TYPE*)data)->data[1];
-      g_y[2]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
-      g_y[3]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[2]=((s16)(d&0x0000FFFF)) / AD3552_AMPL;
+      g_ydac[3]=((s16)((d>>16)&0x0000FFFF)) / AD3552_AMPL;
       break;
 
     // update only one DAC channel with the value requested by linux
@@ -127,11 +142,15 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       dval=((s16)(d&0x0000FFFF)) / (1.0*AD3552_AMPL);
       nch=(d>>16)&0x0000FFFF;
       if((nch>=1)&&(nch<=4))
-        g_y[nch-1]=dval;
+        g_ydac[nch-1]=dval;
       else
         {
         LPRINTF("RPMSGCMD_WRITE_DACCH index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -139,17 +158,68 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_DAC:
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DAC;
       // need an intermediate cast to s32 for negative numbers
-      ((R5_RPMSG_TYPE*)data)->data[0] = ((((u32)((s32)(round(g_y[1]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
-                                         (((u32)((s32)(round(g_y[0]*AD3552_AMPL))))&0x0000FFFF);
-      ((R5_RPMSG_TYPE*)data)->data[1] = ((((u32)((s32)(round(g_y[3]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
-                                         (((u32)((s32)(round(g_y[2]*AD3552_AMPL))))&0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[0] = ((((u32)((s32)(round(g_ydac[1]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
+                                         (((u32)((s32)(round(g_ydac[0]*AD3552_AMPL))))&0x0000FFFF);
+      ((R5_RPMSG_TYPE*)data)->data[1] = ((((u32)((s32)(round(g_ydac[3]*AD3552_AMPL))))<<16)&0xFFFF0000) | 
+                                         (((u32)((s32)(round(g_ydac[2]*AD3552_AMPL))))&0x0000FFFF);
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
         LPRINTF("DAC READBACK incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // update DAC channel offset with the value requested by linux
+    case RPMSGCMD_WRITE_DACOFFS:
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=(s32)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch>=1)&&(nch<=4))
+        gDAC_offs_cnt[nch-1]=d;
+      else
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACOFFS index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // read back offset of a particular DAC channel
+    case RPMSGCMD_READ_DACOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_DACOFFS index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOFFS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gDAC_offs_cnt[nch-1]);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("DAC OFFS READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -164,7 +234,219 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("ADC READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // select DAC driver
+    case RPMSGCMD_WRITE_DACOUTSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACOUTSEL index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_DACOUTSEL selector out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      gDAC_outputSelect[nch-1]   = d-1;
+      break;
+    
+    // read back DAC out selection
+    case RPMSGCMD_READ_DACOUTSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_DACOUTSEL index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_DACOUTSEL;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gDAC_outputSelect[nch-1]+1);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("DAC OUT SEL READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // select control loop channel input
+    case RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_INSEL selector out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gCtrlLoopChanConfig[nch-1].inputSelect=d-1;
+      break;
+
+    // read back ctrl loop input selector
+    case RPMSGCMD_READ_CTRLLOOP_CH_INSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_CTRLLOOP_CH_INSEL index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_CTRLLOOP_CH_INSEL;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gCtrlLoopChanConfig[nch-1].inputSelect+1);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("CTRLLOOP IN_SEL READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // update ADC channel offset with the value requested by linux
+    case RPMSGCMD_WRITE_ADCOFFS:
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=(s32)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch>=1)&&(nch<=4))
+        gADC_offs_cnt[nch-1]=d;
+      else
+        {
+        LPRINTF("RPMSGCMD_WRITE_ADCOFFS index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // read back offset of a particular ADC channel
+    case RPMSGCMD_READ_ADCOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_ADCOFFS index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADCOFFS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gADC_offs_cnt[nch-1]);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("ADC OFFS READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // update ADC channel gain with the value requested by linux
+    case RPMSGCMD_WRITE_ADCGAIN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch>=1)&&(nch<=4))
+        // read floating point values directly as float (32 bit)
+        memcpy(&(gADC_gain[nch-1]), &(((R5_RPMSG_TYPE*)data)->data[1]), sizeof(u32));
+      else
+        {
+        LPRINTF("RPMSGCMD_WRITE_ADCGAIN index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // read back gain of a particular ADC channel
+    case RPMSGCMD_READ_ADCGAIN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_ADCGAIN index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_ADCGAIN;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[1]), &(gADC_gain[nch-1]), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("ADC GAIN READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -184,7 +466,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("FSAMPL READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -202,22 +488,657 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         }
       
       if(d==0)
-        gR5ctrlState=R5CTRLR_IDLE;
+        gWavegenEnable=false;
       else
-        gR5ctrlState=R5CTRLR_WAVEGEN;
+        gWavegenEnable=true;
       break;
+
+    // start or stop CONTROL LOOP
+    case RPMSGCMD_CTRLLOOP_ONOFF:
+      d=((R5_RPMSG_TYPE*)data)->data[0];
+      
+      // reset filters inside control loop
+      for(i=0; i<4; i++)
+        {
+        ResetPID(i,0);
+        ResetPID(i,1);
+        ResetIIR(i,0);
+        ResetIIR(i,1);
+        }
+      
+      if(d==0)
+        gCtrlLoopEnable=false;
+      else
+        gCtrlLoopEnable=true;
+      break;
+
+    // reset PID
+    case RPMSGCMD_RESET_PID:
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_RESET_PID chan index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_RESET_PID instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      ResetPID(nch-1,d-1);
+      break;
+
+    // reset IIR
+    case RPMSGCMD_RESET_IIR:
+      nch=((R5_RPMSG_TYPE*)data)->data[0];
+      d=((R5_RPMSG_TYPE*)data)->data[1];
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_RESET_IIR chan index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_RESET_IIR instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      ResetIIR(nch-1,d-1);
+      break;
+
+    // set PID gains
+    case RPMSGCMD_WRITE_PID_GAINS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_GAINS channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_GAINS instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gp),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gi),    &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G1d),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G2d),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G_aiw), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+    // read back PID gains
+    case RPMSGCMD_READ_PID_GAINS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_GAINS channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_GAINS instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_GAINS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].Gp), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].Gi), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[4]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].G1d), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[5]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].G2d), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[6]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].G_aiw), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID GAINS READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+
+    // set IIR coefficients
+    case RPMSGCMD_WRITE_IIR_COEFF:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_IIR_COEFF channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_IIR_COEFF instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[0]), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[1]), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[2]), &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[0]), &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+    // read back IIR coefficients
+    case RPMSGCMD_READ_IIR_COEFF:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_IIR_COEFF channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_IIR_COEFF instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_IIR_COEFF;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[0]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[1]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[4]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[2]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[5]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[0]), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[6]), &(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("IIR COEFF READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+
+    // write MIMO matrix row
+    case RPMSGCMD_WRITE_MATRIX_ROW:
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((d<0)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW matrix index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      switch(d)
+          {
+          case 0:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            break;
+          case 1:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            break;
+          case 2:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            break;
+          case 3:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            break;
+          case 4:
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            break;
+          case 5:
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            break;
+          }
+
+      // read floating point values directly as float (32 bit)
+      for(i=0; i<5; i++)
+        memcpy(xp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
+      
+      break;
+
+
+    // read back MIMO matrix row
+    case RPMSGCMD_READ_MATRIX_ROW:
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((d<0)||(d>5))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW matrix index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_MATRIX_ROW channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      switch(d)
+          {
+          case 0:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            break;
+          case 1:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            break;
+          case 2:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            break;
+          case 3:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            break;
+          case 4:
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            break;
+          case 5:
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            break;
+          }
+
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_MATRIX_ROW;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(d);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(nch);
+      // write floating point values directly as float (32 bit)
+      for(i=0; i<5; i++)
+        memcpy(&(((R5_RPMSG_TYPE*)data)->data[2+i]), xp+i, sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("MATRIX ROW READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+
+    // set PID thresholds
+    case RPMSGCMD_WRITE_PID_THR:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_THR channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_THR instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat),   &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      break;
+
+
+    // read back PID thresholds
+    case RPMSGCMD_READ_PID_THR:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_THR channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_THR instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_THR;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      // write floating point values directly as float (32 bit)
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[2]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr), sizeof(u32));
+      memcpy(&(((R5_RPMSG_TYPE*)data)->data[3]), &(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat), sizeof(u32));
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID THR READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+
+    // set PID derivative on process variable
+    case RPMSGCMD_WRITE_PID_PV_DERIV:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_PV_DERIV channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_PV_DERIV instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gCtrlLoopChanConfig[nch-1].PID[d-1].deriv_on_PV = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
+
+    // read PID derivative on process variable
+    case RPMSGCMD_READ_PID_PV_DERIV:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_PV_DERIV channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_PV_DERIV instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_PV_DERIV;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      ((R5_RPMSG_TYPE*)data)->data[2] = (u32)(gCtrlLoopChanConfig[nch-1].PID[d-1].deriv_on_PV ? 1 : 0);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID PV_DERIV READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+
+    // set PID command inversion
+    case RPMSGCMD_WRITE_PID_INVCMD:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_INVCMD channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_INVCMD instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gCtrlLoopChanConfig[nch-1].PID[d-1].invert_cmd = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
+
+    // read PID command inversion
+    case RPMSGCMD_READ_PID_INVCMD:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_INVCMD channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_INVCMD instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_INVCMD;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      ((R5_RPMSG_TYPE*)data)->data[2] = (u32)(gCtrlLoopChanConfig[nch-1].PID[d-1].invert_cmd ? 1 : 0);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID INV_CMD READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+
+    // set PID measurement input inversion
+    case RPMSGCMD_WRITE_PID_INVMEAS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_INVMEAS channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_WRITE_PID_INVMEAS instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
+
+    // read PID measurement input inversion
+    case RPMSGCMD_READ_PID_INVMEAS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_INVMEAS channel out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        LPRINTF("RPMSGCMD_READ_PID_INVMEAS instance out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_PID_INVMEAS;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)(nch);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(d);
+      ((R5_RPMSG_TYPE*)data)->data[2] = (u32)(gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas ? 1 : 0);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("PID INV_MEAS READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
 
     // send current state
     case RPMSGCMD_READ_STATE:
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_STATE;
-      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)gR5ctrlState;
+      // code section enables into bits
+      d=R5CTRLR_IDLE;
+      if(gRecorderConfig.state!=RECORDER_IDLE)
+        d|=R5CTRLR_RECORD;
+      if(gCtrlLoopEnable)
+        d|=R5CTRLR_CTRLLOOP;
+      if(gWavegenEnable)
+        d|=R5CTRLR_WAVEGEN;
+      ((R5_RPMSG_TYPE*)data)->data[0] = d;
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
         LPRINTF("STATE READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -227,7 +1148,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_WGEN_CH_CONF index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
@@ -255,7 +1180,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_READ_WGEN_CH_CONF index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_CONF;
@@ -273,17 +1202,25 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("WGEN CH CONF READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
     
-    // enable/disable one wavefrom generator channel
-    case RPMSGCMD_WRITE_WGEN_CH_EN:
+    // enable/disable one waveform generator channel
+    case RPMSGCMD_WRITE_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         {
-        LPRINTF("RPMSGCMD_WRITE_WGEN_CH_EN index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        LPRINTF("RPMSGCMD_WRITE_WGEN_CH_STATE index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       // reset sweep counters every time we get this command
@@ -295,28 +1232,88 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         gCurSweepSamples[i]=0;
         }
 
-      gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gWavegenChanConfig[nch-1].state = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       break;
 
-    // read back on/off state of one wavefrom generator channel
-    case RPMSGCMD_READ_WGEN_CH_EN:
+    // read back on/off state of one waveform generator channel
+    case RPMSGCMD_READ_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
         {
-        LPRINTF("RPMSGCMD_READ_WGEN_CH_EN index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        LPRINTF("RPMSGCMD_READ_WGEN_CH_STATE index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
-      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_EN;
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_WGEN_CH_STATE;
       ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
-      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gWavegenChanConfig[nch-1].enable);
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gWavegenChanConfig[nch-1].state);
 
       numbytes= rpmsg_send(ept, data, rpmsglen);
       if(numbytes<rpmsglen)
         {
         // answer transmission incomplete
-        LPRINTF("WGEN CH EN READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        LPRINTF("WGEN CH STATE READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      break;
+
+    // enable/disable one control loop channel
+    case RPMSGCMD_WRITE_CTRLLOOP_CH_STATE:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_WRITE_CTRLLOOP_CH_STATE index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      // reset filters inside control loop channel
+      ResetPID(nch-1,0);
+      ResetPID(nch-1,1);
+      ResetIIR(nch-1,0);
+      ResetIIR(nch-1,1);
+
+      gCtrlLoopChanConfig[nch-1].state = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // read back on/off state of a control loop channel
+    case RPMSGCMD_READ_CTRLLOOP_CH_STATE:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        LPRINTF("RPMSGCMD_READ_CTRLLOOP_CH_STATE index out of range\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      ((R5_RPMSG_TYPE*)data)->command = RPMSGCMD_READ_CTRLLOOP_CH_STATE;
+      ((R5_RPMSG_TYPE*)data)->data[0] = (u32)nch;
+      ((R5_RPMSG_TYPE*)data)->data[1] = (u32)(gCtrlLoopChanConfig[nch-1].state);
+
+      numbytes= rpmsg_send(ept, data, rpmsglen);
+      if(numbytes<rpmsglen)
+        {
+        // answer transmission incomplete
+        LPRINTF("CTRLLOOP CH STATE READ incomplete answer transmitted.\n\r");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -341,7 +1338,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("TRIG READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -351,7 +1352,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       if((nch<1)||(nch>4))
         {
         LPRINTF("RPMSGCMD_WRITE_TRIG_CFG index out of range\n\r");
-        return RPMSG_ERR_PARAM;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       
       gRecorderConfig.trig_chan=nch;
@@ -380,7 +1385,11 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
         {
         // answer transmission incomplete
         LPRINTF("TRIG setup READ incomplete answer transmitted.\n\r");
-        return RPMSG_ERR_BUFF_SIZE;
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_BUFF_SIZE;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
         }
       break;
 
@@ -1022,14 +2031,37 @@ void AddTimeToTable(int theindex, double thetime)
 
 // -----------------------------------------------------------
 
+void ResetPID(int chan, int instance)
+  {
+  gCtrlLoopChanConfig[chan].PID[instance].xn1        =0.;
+  gCtrlLoopChanConfig[chan].PID[instance].measn1     =0.;
+  gCtrlLoopChanConfig[chan].PID[instance].yi_n1      =0.;
+  gCtrlLoopChanConfig[chan].PID[instance].yd_n1      =0.;
+  }
+
+
+// -----------------------------------------------------------
+
+void ResetIIR(int chan, int instance)
+  {
+  gCtrlLoopChanConfig[chan].IIR[instance].x[0]  =0.;
+  gCtrlLoopChanConfig[chan].IIR[instance].x[1]  =0.;
+  gCtrlLoopChanConfig[chan].IIR[instance].y[0]  =0.;
+  gCtrlLoopChanConfig[chan].IIR[instance].y[1]  =0.;
+  }
+
+
+// -----------------------------------------------------------
+
 void InitVars(void)
   {
-  int i;
+  int i,j;
 
   // init vars
   gFsampl = DEFAULT_TIMER_FREQ_HZ;
   g2pi=8.*atan(1.);
-  gR5ctrlState=R5CTRLR_IDLE;
+  gWavegenEnable=false;
+  gCtrlLoopEnable=false;
   gRecorderConfig.state=RECORDER_IDLE;
   gRecorderConfig.trig_chan=1;
   gRecorderConfig.mode=RECORDER_SLOPE;
@@ -1039,19 +2071,75 @@ void InitVars(void)
   for(i=0; i<4; i++)
     {
     g_x[i]=0.;
-    g_y[i]=0.;
+    g_ywgen[i]=0.;
+    g_ydac[i]=0.;
+    gADC_offs_cnt[i]=0;
+    gADC_gain[i]=1.;
+    gDAC_offs_cnt[i]=0;
+
     gPhase[i]=0.;
     gFreq[i]=0.;
     gTotSweepSamples[i]=0;
     gCurSweepSamples[i]=0;
-    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
+    gWavegenChanConfig[i].state  = WGEN_CH_STATE_OFF;
     gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
     gWavegenChanConfig[i].ampl   = 0.;
     gWavegenChanConfig[i].offs   = 0.;
     gWavegenChanConfig[i].f1     = 0.;
     gWavegenChanConfig[i].f2     = 0.;
     gWavegenChanConfig[i].dt     = 1.;
+
+    // control loop params
+
+    gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_DISABLED;
+  
+    for(j=0; j<5; j++)
+      {
+      gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_B[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_C[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_D[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_E[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_F[j]=0.;
+      }
+  
+    // identity matrix
+    gCtrlLoopChanConfig[i].input_MISO_A[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_B[0]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_C[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_D[0]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
+
+    gCtrlLoopChanConfig[i].inputSelect=i;
+    gDAC_outputSelect[i]=i;
+  
+    for(j=0; j<2; j++)
+      {
+      gCtrlLoopChanConfig[i].PID[j].Gp         =1.;
+      gCtrlLoopChanConfig[i].PID[j].Gi         =0.;
+      gCtrlLoopChanConfig[i].PID[j].G1d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G2d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G_aiw      =1.;
+      gCtrlLoopChanConfig[i].PID[j].out_sat    =1.;
+      gCtrlLoopChanConfig[i].PID[j].in_thr     =0.;
+      gCtrlLoopChanConfig[i].PID[j].deriv_on_PV=false;
+      gCtrlLoopChanConfig[i].PID[j].invert_cmd =false;
+      gCtrlLoopChanConfig[i].PID[j].invert_meas=false;
+
+      ResetPID(i,j);
+    
+      gCtrlLoopChanConfig[i].IIR[j].a[0]  =1.;
+      gCtrlLoopChanConfig[i].IIR[j].a[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].a[2]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[1]  =0.;
+    
+      ResetIIR(i,j);
+      }
+
     }
+
 
   // init number of IRQ served
   last_irq_cnt=0;
@@ -1067,6 +2155,8 @@ int main()
   int          status, i;
   double       currtimer_us, sigma;
   double       dphase, alpha, dfreq;
+  double       cmd, loopvar[4];
+  s32          DACtemp[4];
 
   // remove buffering from stdin and stdout
   setvbuf (stdout, NULL, _IONBF, 0);
@@ -1097,7 +2187,8 @@ int main()
     return status;
     }
 
-  
+  LPRINTF("Starting main loop\n\r");
+
   shutdown_req = 0;  
   // shutdown_req will be set set to 1 by RPMSG unbind callback
   while(!shutdown_req)
@@ -1126,17 +2217,21 @@ int main()
 
 
       // read ADCs into raw (adcval[i]) and with fullscale = 1.0 (g_x[i])
+      // taking into account offset and gain correction
       ReadADCs(adcval);
       for(i=0; i<4; i++)
         {
         // x_(n-1)
         g_x_1[i]=g_x[i];
         // x_(n)
-        g_x[i]=adcval[i]/ADAQ23876_FULLSCALE_CNT;
+        // offset correction must be applied before converting to floating point, 
+        // for best dynamic range exploitation
+        g_x[i]=(adcval[i]+gADC_offs_cnt[i])/ADAQ23876_FULLSCALE_CNT*(double)(gADC_gain[i]);
         }
 
 
-      // shall we trigger the recorder?
+      // sample recorder  ----------------------------------------------------------------
+
       switch(gRecorderConfig.state)
         {
         case RECORDER_FORCE:
@@ -1192,100 +2287,96 @@ int main()
         }
 
 
-      // do something: either signal generator or controller (or idle)
+      // signal generator  ----------------------------------------------------------------
 
-      switch(gR5ctrlState)
+      if(gWavegenEnable)
         {
-        case R5CTRLR_IDLE:
-          break;
-        
-        case R5CTRLR_WAVEGEN:
-          for(i=0; i<4; i++)
+        for(i=0; i<4; i++)
+          {
+          if(gWavegenChanConfig[i].state==WGEN_CH_STATE_OFF)
+            g_ywgen[i]=0.0;
+          else
             {
-            if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_OFF)
-              g_y[i]=0.0;
-            else
+            //channel is enabled
+            switch(gWavegenChanConfig[i].type)
               {
-              //channel is enabled
-              switch(gWavegenChanConfig[i].type)
-                {
-                case WGEN_CH_TYPE_DC:
-                  g_y[i]=gWavegenChanConfig[i].ampl;
-                  break;
+              case WGEN_CH_TYPE_DC:
+                g_ywgen[i]=gWavegenChanConfig[i].ampl;
+                break;
 
-                case WGEN_CH_TYPE_SINE:
-                  // output current phase
-                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
-                  // calculate next phase
-                  dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
-                  gPhase[i] += dphase;
-                  if(gPhase[i]>g2pi)
-                    gPhase[i] -= g2pi;
-                  break;
+              case WGEN_CH_TYPE_SINE:
+                // output current phase
+                g_ywgen[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                // calculate next phase
+                dphase = g2pi*gWavegenChanConfig[i].f1/gFsampl;
+                gPhase[i] += dphase;
+                if(gPhase[i]>g2pi)
+                  gPhase[i] -= g2pi;
+                break;
 
+              case WGEN_CH_TYPE_SWEEP:
 
-                case WGEN_CH_TYPE_SWEEP:
+                // if the recorder trigger mode is SWEEP and 
+                // the trigger is armed and
+                // this is the right trig channel and
+                // this is the first sample of the sweep,
+                // then force a trigger to start recording
+                if( (gRecorderConfig.trig_chan == (i+1)          ) &&
+                    (gRecorderConfig.state     == RECORDER_ARMED ) &&
+                    (gRecorderConfig.mode      == RECORDER_SWEEP ) &&
+                    (gCurSweepSamples[i]       == 0              ) )
+                  {
+                  gRecorderConfig.state=RECORDER_FORCE;
+                  }
 
-                  // if the recorder trigger mode is SWEEP and 
-                  // the trigger is armed and
-                  // this is the right trig channel and
-                  // this is the first sample of the sweep,
-                  // then force a trigger to start recording
-                  if( (gRecorderConfig.trig_chan == (i+1)          ) &&
-                      (gRecorderConfig.state     == RECORDER_ARMED ) &&
-                      (gRecorderConfig.mode      == RECORDER_SWEEP ) &&
-                      (gCurSweepSamples[i]       == 0              ) )
+                // output current phase
+                g_ywgen[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
+                // calculate next phase
+                if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
+                  {
+                  alpha=0;
+                  gTotSweepSamples[i]=0;
+                  }
+                else 
+                  {
+                  alpha=((double)(gWavegenChanConfig[i].f2)-gWavegenChanConfig[i].f1)/gWavegenChanConfig[i].dt;
+                  gTotSweepSamples[i]=gWavegenChanConfig[i].dt*gFsampl;
+                  }
+
+                gFreq[i]  += alpha/gFsampl;
+                dphase     = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
+                gPhase[i] += dphase;
+                if(gPhase[i]>g2pi)
+                  gPhase[i] -= g2pi;
+                
+                // check sweep status
+                gCurSweepSamples[i]++;
+                if(gCurSweepSamples[i]>=gTotSweepSamples[i])
+                  {
+                  // end of sweep
+                  if(gWavegenChanConfig[i].state==WGEN_CH_STATE_SINGLE)
                     {
-                    gRecorderConfig.state=RECORDER_FORCE;
+                    // stop after a single sweep
+                    gWavegenChanConfig[i].state=WGEN_CH_STATE_OFF;
+                    gPhase[i]=0.;
+                    gFreq[i]=0.;
                     }
+                  else
+                    {
+                    // sweep forever: restart from f1
+                    gPhase[i]=0.;
+                    gFreq[i]=0.;
+                    gCurSweepSamples[i]=0;                      
+                    }
+                  }
+                break;
+              }  // switch/case on waveform type
+            }  // if channel enabled
+          // DAC output defaults to corresponding wavegen channel
+          g_ydac[i]=g_ywgen[i];
+          }  // loop on 4 channels
+        }  // waveform generator
 
-                  // output current phase
-                  g_y[i]=sin(gPhase[i])*gWavegenChanConfig[i].ampl + gWavegenChanConfig[i].offs;
-                  // calculate next phase
-                  if(gWavegenChanConfig[i].dt<__DBL_EPSILON__)
-                    {
-                    alpha=0;
-                    gTotSweepSamples[i]=0;
-                    }
-                  else 
-                    {
-                    alpha=((double)(gWavegenChanConfig[i].f2)-gWavegenChanConfig[i].f1)/gWavegenChanConfig[i].dt;
-                    gTotSweepSamples[i]=gWavegenChanConfig[i].dt*gFsampl;
-                    }
-
-                  gFreq[i]  += alpha/gFsampl;
-                  dphase     = g2pi*((double)(gWavegenChanConfig[i].f1)+gFreq[i])/gFsampl;
-                  gPhase[i] += dphase;
-                  if(gPhase[i]>g2pi)
-                    gPhase[i] -= g2pi;
-                  
-                  // check sweep status
-                  gCurSweepSamples[i]++;
-                  if(gCurSweepSamples[i]>=gTotSweepSamples[i])
-                    {
-                    // end of sweep
-                    if(gWavegenChanConfig[i].enable==WGEN_CH_ENABLE_SINGLE)
-                      {
-                      // stop after a single sweep
-                      gWavegenChanConfig[i].enable=WGEN_CH_ENABLE_OFF;
-                      gPhase[i]=0.;
-                      gFreq[i]=0.;
-                      }
-                    else
-                      {
-                      // sweep forever: restart from f1
-                      gPhase[i]=0.;
-                      gFreq[i]=0.;
-                      gCurSweepSamples[i]=0;                      
-                      }
-                    }
-                  break;
-                }
-              }
-            }
-          break;
-        }
-      
 
       // register time of end of sine wave calculation
       #ifdef PROFILE
@@ -1293,14 +2384,74 @@ int main()
       AddTimeToTable(2,currtimer_us);
       #endif
 
-      // write DACs from values with fullscale = 1 (g_y[i]) into raw (dacval[i])
+
+      // control loop  ----------------------------------------------------------------
+
+      if(gCtrlLoopEnable)
+        {
+        // calculate loop channels first
+        for(i=0; i<4; i++)
+          {
+          if(gCtrlLoopChanConfig[i].state == CTRLLOOP_CH_ENABLED)
+            {
+            // input selector: 
+            //  if 0 to 3, then use that channel of the waveform generator;
+            //  if 4, then use ADC via the appropriate MISO (multiple input single output) matrix
+            if(gCtrlLoopChanConfig[i].inputSelect >=4)
+              cmd=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_C, gCtrlLoopChanConfig[i].input_MISO_D, 4);
+            else
+              cmd=g_ywgen[gCtrlLoopChanConfig[i].inputSelect];
+            
+            loopvar[i]=MISO(g_x, gCtrlLoopChanConfig[i].input_MISO_A, gCtrlLoopChanConfig[i].input_MISO_B, 4);
+            loopvar[i]=PID(cmd,loopvar[i],&(gCtrlLoopChanConfig[i].PID[0]));
+            loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR[0]));
+            loopvar[i]=IIR2(loopvar[i],&(gCtrlLoopChanConfig[i].IIR[1]));
+            loopvar[i]=PID(loopvar[i],0.,&(gCtrlLoopChanConfig[i].PID[1]));
+            }
+          else
+            {
+            loopvar[i]=0.;
+            }
+          }
+        
+        // now calculate output channels
+        for(i=0; i<4; i++)
+          {
+          if(gDAC_outputSelect[i]>=4)
+            g_ydac[i]=MISO(loopvar, gCtrlLoopChanConfig[i].output_MISO_E, gCtrlLoopChanConfig[i].output_MISO_F, 4);
+          else
+            g_ydac[i]=g_ywgen[gDAC_outputSelect[i]];
+          }
+        
+        }  // control loop
+
+
+      // register time of end of control loop calculation
+      #ifdef PROFILE
+      currtimer_us=GetTimer_us();
+      AddTimeToTable(3,currtimer_us);
+      #endif
+
+
+      // output to DAC  ----------------------------------------------------------------
+
+
+      // write DACs from values with fullscale = 1 (g_ydac[i]) into raw (dacval[i])
 
       // DAC AD3552 is offset binary;
       // usual conversion from 2's complement is done inverting the MSB,
       // but here I prefer to keep a fullscale of +/-1 (double) in the calculations,
       // so I just scale and offset at the end, which is clearer
       for(i=0; i<4; i++)
-        dacval[i]=(u16)round(g_y[i]*AD3552_AMPL+AD3552_OFFS);
+        {
+        // FIRST I add the offset, THEN I saturate
+        DACtemp[i]=g_ydac[i]*AD3552_AMPL+gDAC_offs_cnt[i];
+        if(DACtemp[i]>AD3552_MAX)
+          DACtemp[i]=AD3552_MAX;
+        else if(DACtemp[i]<-AD3552_MAX)
+          DACtemp[i]=-AD3552_MAX;
+        dacval[i]=(u16)round(DACtemp[i]+AD3552_OFFS);
+        }
       
       status = WriteDacSamples(0,dacval[0], dacval[1]);
       status = WriteDacSamples(1,dacval[2], dacval[3]);
@@ -1324,23 +2475,11 @@ int main()
         {
         last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
 
-        // // print current state
-        // LPRINTF("R5 state is ");
-        // switch(gR5ctrlState)
-        //   {
-        //   case R5CTRLR_IDLE:
-        //     LPRINTF("IDLE\n\r");
-        //     break;
-        //   case R5CTRLR_WAVEGEN:
-        //     LPRINTF("WAVEGEN\n\r");
-        //     break;
-        //   }
-          
         //  // print IRQ number
         //  LPRINTF("Tot IRQs so far: %d \n\r",last_irq_cnt);
 
-        // in IDLE mode print ADC values
-        if( gR5ctrlState == R5CTRLR_IDLE )
+        // print ADC values
+        if(true)
           {
           for(i=0; i<4; i++)
             // LPRINTF("ADC#%d = %3d.%03d ",
@@ -1352,22 +2491,22 @@ int main()
           LPRINTF("\n\r");
           }
 
-        // in WAVEGEN mode print channel configurations
-        if( gR5ctrlState == R5CTRLR_WAVEGEN )
+        // print channel configurations
+        if(true)
           {
           for(i=0; i<4; i++)
             {
             LPRINTF("WAVEGEN CH# %d ",i+1);
 
-            switch(gWavegenChanConfig[i].enable)
+            switch(gWavegenChanConfig[i].state)
               {
-              case WGEN_CH_ENABLE_OFF:
+              case WGEN_CH_STATE_OFF:
                 LPRINTF("   OFF  ");
                 break;
-              case WGEN_CH_ENABLE_ON:
+              case WGEN_CH_STATE_ON:
                 LPRINTF("   ON   ");
                 break;
-              case WGEN_CH_ENABLE_SINGLE:
+              case WGEN_CH_STATE_SINGLE:
                 LPRINTF(" SINGLE ");
                 break;
               }
@@ -1431,9 +2570,14 @@ int main()
             }
           LPRINTF("\n\r");
           }
+        }
+      #endif  // PRINTOUT
 
-        // print profiling info
-        #ifdef PROFILE
+      #ifdef PROFILE
+      // every now and then print profiling info
+      if(irq_cntr[TIMER_IRQ_CNTR]-last_irq_cnt >= gFsampl)
+        {
+        last_irq_cnt = irq_cntr[TIMER_IRQ_CNTR];
         LPRINTF("Number of Timer IRQs          : %d\n\r", last_irq_cnt);
 
         LPRINTF("Timer IRQ latency (us)        : avg= %d.%03d ; max= %d.%03d\n\r", 
@@ -1450,14 +2594,22 @@ int main()
           (int)(sigma), DECIMALS(sigma, 3),
           (int)(time_table[2][PROFTIME_MAX]) );
 
+        sigma=time_table[3][PROFTIME_AVG2]-time_table[3][PROFTIME_AVG]*time_table[3][PROFTIME_AVG];
+        LPRINTF("End of Control Loop (us)      : avg= %d ; s= %d.%03d; max= %d\n\r", 
+          (int)(time_table[3][PROFTIME_AVG]), 
+          (int)(sigma), DECIMALS(sigma, 3),
+          (int)(time_table[3][PROFTIME_MAX]) );
+
         LPRINTF("Ctrl loop step end (us)       : avg= %d ; max= %d\n\r", 
           (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_AVG]), 
           (int)(time_table[PROFILE_TIME_ENTRIES-1][PROFTIME_MAX]) );
   
         LPRINTF("\n\r");
-        #endif  // PROFILE
+
+        // sometimes I may want to see short term changes, so I need to reset the time table
+        ResetTimeTable();
         }
-      #endif  // PRINTOUT
+      #endif  // PROFILE
 
       }  // if timer occurred
 
