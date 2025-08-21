@@ -23,6 +23,7 @@ sudo tar xvf images/linux/rootfs.tar.gz -C /media/valbas/root
 # sudo cp -r ./hardware/gitcode/r5ctrlr/linux_web_interface/srv/* /media/valbas/root/srv/.
 # sudo chmod -R a+rx /media/valbas/root/srv/*
 # apache stuff
+sudo rm /media/valbas/root/usr/share/apache2/default-site/htdocs/index.html
 sudo cp -r ./hardware/gitcode/r5ctrlr/linux_web_interface/* /media/valbas/root/.
 sudo chmod -R a+rx /media/valbas/root/usr/libexec/apache2/modules/cgi-bin/*.cgi
 sudo chmod -R a+rx /media/valbas/root/usr/share/apache2/default-site/htdocs/*

@@ -1,15 +1,15 @@
 #!/usr/bin/python
 
 import socket
-import select
+#import select
 import os
 import urllib.parse
-import time
-from datetime import datetime
-import numpy as np
-import matplotlib.pyplot as plt
-import io
-import base64
+#import time
+#from datetime import datetime
+#import numpy as np
+#import matplotlib.pyplot as plt
+#import io
+#import base64
 import fnmatch
 
 # constants
@@ -26,7 +26,7 @@ print('<html>')
 print('<head>')
 print('  <table>')
 print('    <tr>')
-print('      <td> <a href="/index.html"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
+print('      <td> <a href="/cgi-bin/index.cgi"> <img src="/MAX-IV_logo1_rgb-300x104.png" alt="MaxIV Laboratory"> </a> </td>')
 print('      <td>')
 print('      <H1>Max IV R5 controller</H1>')
 print('      <H2>Waveform Generator Facility</H2>')
@@ -61,7 +61,8 @@ s.sendall(b"*STB?\n")
 ans=(s.recv(1024)).decode("utf-8")
 tok=ans.split(" ",2)
 if(tok[0].strip()=="OK:"):
-  if (tok[1].strip()=="WAVEGEN"):
+  stb=int(tok[1])
+  if((stb&0x02) != 0):
     globalEnable=True
   else:
     globalEnable=False
@@ -74,7 +75,7 @@ else:
 ch_conf=[dict() for ch in range(4)]
 
 for ch in range(4):
-  qstr='WAVEGEN:CH_ENABLE? '+str(ch+1)+'\n'
+  qstr='WAVEGEN:CH:STATE? '+str(ch+1)+'\n'
   s.sendall(bytes(qstr,encoding='ascii')) 
   ans=(s.recv(1024)).decode("utf-8")
   tok=ans.split(" ",2)
@@ -83,7 +84,7 @@ for ch in range(4):
   else:
     ch_conf[ch]['en']='OFF'
 
-  qstr='WAVEGEN:CH_CONFIG? '+str(ch+1)
+  qstr='WAVEGEN:CH:CONFIG? '+str(ch+1)+'\n'
   s.sendall(bytes(qstr,encoding='ascii')) 
   ans=(s.recv(1024)).decode("utf-8")
   tok=ans.split(" ",7)
@@ -160,7 +161,7 @@ for name in arguments.keys():
     else:
       the_state='OFF'
     ch_conf[the_chan-1]['en']=the_state
-    cmd_s='WAVEGEN:CH_ENABLE '+str(the_chan)+' '+the_state+'\n'
+    cmd_s='WAVEGEN:CH:STATE '+str(the_chan)+' '+the_state+'\n'
     #print(f'<br> >>>>> {cmd_s} <<<<< <br>')
     s.sendall(cmd_s.encode('ascii')) 
     ans=(s.recv(1024)).decode('utf-8')
@@ -220,7 +221,7 @@ for name in arguments.keys():
 # ---------  now write back the updated channel config to the R5  ------------
 
 for ch in range(4):
-  qstr='WAVEGEN:CH_CONFIG '+str(ch+1)+' '                \
+  qstr='WAVEGEN:CH:CONFIG '+str(ch+1)+' '                \
                            +ch_conf[ch]['type']+' '      \
                            +str(ch_conf[ch]['ampl'])+' ' \
                            +str(ch_conf[ch]['offs'])+' ' \

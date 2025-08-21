@@ -12,6 +12,8 @@
 
 #include "linux_main.h"
 
+//#define RPMSG_DEBUG
+
 // ##########  globals  #######################
 
 void *gplatform;
@@ -24,11 +26,14 @@ static int ept_deleted = 0;
 int gIncomingRpmsgs;
 
 s16 g_adcval[4], g_dacval[4];
+s32 gADC_offs_cnt[4], gDAC_offs_cnt[4];
+int gDAC_outputSelect[4];
+float gADC_gain[4];
 u32 gFsampl;     // R5 sampling frequency rounded to 1 Hz precision
 int gR5ctrlState;
 WAVEGEN_CH_CONFIG gWavegenChanConfig[4];
 TRIG_CONFIG gRecorderConfig;
-
+CTRLLOOP_CH_CONFIG gCtrlLoopChanConfig[4];
 
 
 struct remoteproc_priv rproc_priv = 
@@ -94,14 +99,19 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
   (void)priv;   // avoid warning on unused parameter
 
   u32 cmd, d;
-  int nch;
+  int nch, i;
+  float *xp;
 
   gIncomingRpmsgs++;
 
   if(len<sizeof(R5_RPMSG_TYPE))
     {
     LPRINTF("incomplete message received.\n\r");
-    return RPMSG_ERR_BUFF_SIZE;
+    #ifdef RPMSG_DEBUG
+      return RPMSG_ERR_BUFF_SIZE;
+    #else
+      return RPMSG_SUCCESS;
+    #endif
     }
 
   cmd=((R5_RPMSG_TYPE*)data)->command;
@@ -118,6 +128,37 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       g_dacval[3]=(s16)((d>>16)&0x0000FFFF);
       break;
 
+    // readback DAC offset sent by R5
+    case RPMSGCMD_READ_DACOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_DACOFFS RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      gDAC_offs_cnt[nch-1] = (s32)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback DAC output selection
+    case RPMSGCMD_READ_DACOUTSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_DACOUTSEL RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gDAC_outputSelect[nch-1] = (int)(((R5_RPMSG_TYPE*)data)->data[1])-1;
+      break;
+
     // readback ADC values sent by R5
     case RPMSGCMD_READ_ADC:
       d=((R5_RPMSG_TYPE*)data)->data[0];
@@ -126,6 +167,37 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       d=((R5_RPMSG_TYPE*)data)->data[1];
       g_adcval[2]=(s16)(d&0x0000FFFF);
       g_adcval[3]=(s16)((d>>16)&0x0000FFFF);
+      break;
+
+    // readback ADC offset sent by R5
+    case RPMSGCMD_READ_ADCOFFS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_ADCOFFS RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      gADC_offs_cnt[nch-1] = (s32)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback ADC gain sent by R5
+    case RPMSGCMD_READ_ADCGAIN:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_ADCGAIN RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gADC_gain[nch-1]), &(((R5_RPMSG_TYPE*)data)->data[1]), sizeof(u32));
       break;
 
     // readback sampling frequency
@@ -138,11 +210,18 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       gR5ctrlState=(int)((R5_RPMSG_TYPE*)data)->data[0];
       break;
 
-    // readback wavefrom generator channel config
+    // readback waveform generator channel config
     case RPMSGCMD_READ_WGEN_CH_CONF:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_WGEN_CH_CONF RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
       gWavegenChanConfig[nch-1].type   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
       // read floating point values directly as float (32 bit)
@@ -153,13 +232,284 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
       memcpy(&(gWavegenChanConfig[nch-1].dt),   &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
       break;
 
-    // readback wavefrom generator channel on/off state
-    case RPMSGCMD_READ_WGEN_CH_EN:
+    // readback waveform generator channel on/off state
+    case RPMSGCMD_READ_WGEN_CH_STATE:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_WGEN_CH_STATE RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       
-      gWavegenChanConfig[nch-1].enable   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      gWavegenChanConfig[nch-1].state   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback control loop channel on/off state
+    case RPMSGCMD_READ_CTRLLOOP_CH_STATE:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_CTRLLOOP_CH_STATE RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gCtrlLoopChanConfig[nch-1].state   = (int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      break;
+
+    // readback control loop channel input selector
+    case RPMSGCMD_READ_CTRLLOOP_CH_INSEL:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_CTRLLOOP_CH_INSEL RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>5))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_CTRLLOOP_CH_INSEL RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      gCtrlLoopChanConfig[nch-1].inputSelect=d-1;
+      break;
+
+    // readback PID gains
+    case RPMSGCMD_READ_PID_GAINS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_GAINS RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_GAINS RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gp),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].Gi),    &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G1d),   &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G2d),   &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].G_aiw), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+
+    // readback IIR coeffs
+    case RPMSGCMD_READ_IIR_COEFF:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_IIR_COEFF RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_IIR_COEFF RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[0]), &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[1]), &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].a[2]), &(((R5_RPMSG_TYPE*)data)->data[4]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[0]), &(((R5_RPMSG_TYPE*)data)->data[5]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].IIR[d-1].b[1]), &(((R5_RPMSG_TYPE*)data)->data[6]), sizeof(u32));
+      break;
+
+
+    // readback MIMO matrix row
+    case RPMSGCMD_READ_MATRIX_ROW:
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((d<0)||(d>5))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_MATRIX_ROW RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_MATRIX_ROW RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      switch(d)
+          {
+          case 0:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_A;
+            break;
+          case 1:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_B;
+            break;
+          case 2:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_C;
+            break;
+          case 3:
+            xp=gCtrlLoopChanConfig[nch-1].input_MISO_D;
+            break;
+          case 4:
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_E;
+            break;
+          case 5:
+            xp=gCtrlLoopChanConfig[nch-1].output_MISO_F;
+            break;
+          }
+
+      // read floating point values directly as float (32 bit)
+      for(i=0; i<5; i++)
+        memcpy(xp+i, &(((R5_RPMSG_TYPE*)data)->data[2+i]), sizeof(u32));
+      
+      break;
+
+
+    // readback PID thresholds
+    case RPMSGCMD_READ_PID_THR:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_THR RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_THR RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      
+      // read floating point values directly as float (32 bit)
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].in_thr),    &(((R5_RPMSG_TYPE*)data)->data[2]), sizeof(u32));
+      memcpy(&(gCtrlLoopChanConfig[nch-1].PID[d-1].out_sat),   &(((R5_RPMSG_TYPE*)data)->data[3]), sizeof(u32));
+      break;
+
+    // readback PID derivative on process variable
+    case RPMSGCMD_READ_PID_PV_DERIV:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_PV_DERIV RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_PV_DERIV RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      gCtrlLoopChanConfig[nch-1].PID[d-1].deriv_on_PV = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
+    // readback PID command inversion
+    case RPMSGCMD_READ_PID_INVCMD:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVCMD RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVCMD RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      gCtrlLoopChanConfig[nch-1].PID[d-1].invert_cmd = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
+      break;
+
+    // readback PID measurement input inversion
+    case RPMSGCMD_READ_PID_INVMEAS:
+      nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
+      if((nch<1)||(nch>4))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVMEAS RPMSG_ERR_PARAM (channel)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+      d=(int)(((R5_RPMSG_TYPE*)data)->data[1]);
+      if((d<1)||(d>2))
+        {
+        fprintf(stderr,"RPMSGCMD_READ_PID_INVMEAS RPMSG_ERR_PARAM (data)\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
+
+      gCtrlLoopChanConfig[nch-1].PID[d-1].invert_meas = ( (((R5_RPMSG_TYPE*)data)->data[2]) != 0);
       break;
 
     // readback trigger state
@@ -171,7 +521,14 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     case RPMSGCMD_READ_TRIG_CFG:
       nch=(int)(((R5_RPMSG_TYPE*)data)->data[0]);
       if((nch<1)||(nch>4))
-        return RPMSG_ERR_PARAM;
+        {
+        fprintf(stderr,"RPMSGCMD_READ_TRIG_CFG RPMSG_ERR_PARAM\n");
+        #ifdef RPMSG_DEBUG
+          return RPMSG_ERR_PARAM;
+        #else
+          return RPMSG_SUCCESS;
+        #endif
+        }
       else
         gRecorderConfig.trig_chan=nch;
       
@@ -354,6 +711,93 @@ int CleanupSystem(void *platform)
 
 // -----------------------------------------------------------
 
+void InitVars(void)
+  {
+  int i,j;
+
+  gR5ctrlState=R5CTRLR_IDLE;
+  gIncomingRpmsgs=0;
+  gFsampl=DEFAULT_TIMER_FREQ_HZ;  // 10 kHz default Fsampling
+  gRecorderConfig.state=RECORDER_IDLE;
+  gRecorderConfig.trig_chan=1;
+  gRecorderConfig.mode=RECORDER_SLOPE;
+  gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
+  gRecorderConfig.level=0.;
+
+  for (i=0; i<4; i++)
+    {
+    g_adcval[i]=0;
+    g_dacval[i]=0;
+    gADC_offs_cnt[i]=0;
+    gADC_gain[i]=1;
+    gDAC_offs_cnt[i]=0;
+
+    gWavegenChanConfig[i].state  = WGEN_CH_STATE_OFF;
+    gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
+    gWavegenChanConfig[i].ampl   = 0.;
+    gWavegenChanConfig[i].offs   = 0.;
+    gWavegenChanConfig[i].f1     = 0.;
+    gWavegenChanConfig[i].f2     = 0.;
+    gWavegenChanConfig[i].dt     = 1.;
+
+    // control loop params
+  
+    gCtrlLoopChanConfig[i].state=CTRLLOOP_CH_DISABLED;
+
+    for(j=0; j<5; j++)
+      {
+      gCtrlLoopChanConfig[i].input_MISO_A[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_B[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_C[j]=0.;
+      gCtrlLoopChanConfig[i].input_MISO_D[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_E[j]=0.;
+      gCtrlLoopChanConfig[i].output_MISO_F[j]=0.;
+      }
+
+    // identity matrix
+    gCtrlLoopChanConfig[i].input_MISO_A[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_B[0]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_C[i+1]=1.;
+    gCtrlLoopChanConfig[i].input_MISO_D[0]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_E[i+1]=1.;
+    gCtrlLoopChanConfig[i].output_MISO_F[0]=1.;
+  
+    gCtrlLoopChanConfig[i].inputSelect=i;
+    gDAC_outputSelect[i]=i;
+  
+    for(j=0; j<2; j++)
+      {
+      gCtrlLoopChanConfig[i].PID[j].Gp         =1.;
+      gCtrlLoopChanConfig[i].PID[j].Gi         =0.;
+      gCtrlLoopChanConfig[i].PID[j].G1d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G2d        =0.;
+      gCtrlLoopChanConfig[i].PID[j].G_aiw      =1.;
+      gCtrlLoopChanConfig[i].PID[j].out_sat    =1.;
+      gCtrlLoopChanConfig[i].PID[j].in_thr     =0.;
+      gCtrlLoopChanConfig[i].PID[j].deriv_on_PV=false;
+      gCtrlLoopChanConfig[i].PID[j].invert_cmd =false;
+      gCtrlLoopChanConfig[i].PID[j].invert_meas=false;
+      gCtrlLoopChanConfig[i].PID[j].xn1        =0.;
+      gCtrlLoopChanConfig[i].PID[j].measn1     =0.;
+      gCtrlLoopChanConfig[i].PID[j].yi_n1      =0.;
+      gCtrlLoopChanConfig[i].PID[j].yd_n1      =0.;
+
+      gCtrlLoopChanConfig[i].IIR[j].a[0]  =1.;
+      gCtrlLoopChanConfig[i].IIR[j].a[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].a[2]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].b[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].x[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].x[1]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].y[0]  =0.;
+      gCtrlLoopChanConfig[i].IIR[j].y[1]  =0.;
+      }
+    
+    }
+  }
+
+// -----------------------------------------------------------
+
 int main(int argc, char *argv[])
   {
   int status, numbytes, rpmsglen;
@@ -373,28 +817,7 @@ int main(int argc, char *argv[])
   LPRINTF("\r\nR5 test application #5 : shared PL resources + IRQs + IPC (openamp)\r\n\r\n");
   LPRINTF("This is A53/linux side\r\n\r\n");
 
-  // init vars
-  gR5ctrlState=R5CTRLR_IDLE;
-  gIncomingRpmsgs=0;
-  gFsampl=DEFAULT_TIMER_FREQ_HZ;  // 10 kHz default Fsampling
-  gRecorderConfig.state=RECORDER_IDLE;
-  gRecorderConfig.trig_chan=1;
-  gRecorderConfig.mode=RECORDER_SLOPE;
-  gRecorderConfig.slopedir=RECORDER_SLOPE_RISING;
-  gRecorderConfig.level=0.;
-
-  for (i=0; i<4; i++)
-    {
-    g_adcval[i]=0;
-    g_dacval[i]=0;
-    gWavegenChanConfig[i].enable = WGEN_CH_ENABLE_OFF;
-    gWavegenChanConfig[i].type   = WGEN_CH_TYPE_DC;
-    gWavegenChanConfig[i].ampl   = 0.;
-    gWavegenChanConfig[i].offs   = 0.;
-    gWavegenChanConfig[i].f1     = 0.;
-    gWavegenChanConfig[i].f2     = 0.;
-    gWavegenChanConfig[i].dt     = 1.;
-    }
+  InitVars();
 
   status = SetupSystem(&gplatform);
   if(status!=0)
