@@ -74,7 +74,7 @@ begin
   begin
   if(rising_edge(clk)) then
     if(reset='1') then
-      valid_r      <= '0';
+      valid_r      <= '1';    -- valid is 0 only when reading new samples
       accumreset1: for i in 0 to 3 loop
         accum(i)   <= (others=>'0');
       end loop accumreset1;
@@ -172,7 +172,7 @@ begin
 
         ---------------------------
         when others =>
-          valid_r      <= '0';
+          valid_r      <= '1';
           accumreset6: for i in 0 to 3 loop
             accum(i)   <= (others=>'0');
           end loop accumreset6;

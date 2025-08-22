@@ -9,9 +9,11 @@ entity QUAD_ADAQ23876 is
 	generic (
 		-- Users to add parameters here
 
+    -- stream master intf
+		C_M_AXIS_TDATA_WIDTH    : integer	:= 64;
+
 		-- User parameters ends
 		-- Do not modify the parameters beyond this line
-
 
 		-- Parameters of Axi Slave Bus Interface S00_AXI
 		C_S00_AXI_DATA_WIDTH	: integer	:= 32;
@@ -32,6 +34,17 @@ entity QUAD_ADAQ23876 is
     DB_n          :  in std_logic_vector(3 downto 0);
     SCLK_p        : out std_logic_vector(3 downto 0);
     SCLK_n        : out std_logic_vector(3 downto 0);
+  
+    -- stream master
+		M_AXIS_ACLK	     : in std_logic;
+		M_AXIS_ARESETN	 : in std_logic;
+		M_AXIS_TVALID	   : out std_logic;
+		M_AXIS_TDATA	   : out std_logic_vector(C_M_AXIS_TDATA_WIDTH-1 downto 0);
+		M_AXIS_TSTRB	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
+		M_AXIS_TKEEP	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
+		M_AXIS_TLAST 	   : out std_logic;
+		M_AXIS_TREADY	   : in std_logic;
+
 
 		-- User ports ends
 		-- Do not modify the ports beyond this line
@@ -75,6 +88,7 @@ architecture arch_imp of QUAD_ADAQ23876 is
     sample_D_C        :  in std_logic_vector(31 downto 0);
     sample_valid      :  in std_logic;
     
+    -- AXI-lite slave
     S_AXI_ACLK	: in std_logic;
 		S_AXI_ARESETN	: in std_logic;
 		S_AXI_AWADDR	: in std_logic_vector(C_S_AXI_ADDR_WIDTH-1 downto 0);
@@ -119,6 +133,32 @@ component ADAQ23876_SPI_engine is
     );
 end component ADAQ23876_SPI_engine;
 
+
+component QUAD_streamer is
+  generic
+    (
+    C_M_AXIS_TDATA_WIDTH    : integer	:= 64
+    );
+  port
+    (
+    -- stream master
+    M_AXIS_ACLK	     : in std_logic;
+    M_AXIS_ARESETN	 : in std_logic;
+    M_AXIS_TVALID	   : out std_logic;
+    M_AXIS_TDATA	   : out std_logic_vector(C_M_AXIS_TDATA_WIDTH-1 downto 0);
+    M_AXIS_TSTRB	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
+    M_AXIS_TKEEP	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
+    M_AXIS_TLAST 	   : out std_logic;
+    M_AXIS_TREADY	   : in std_logic;
+
+    -- from SPI engine
+    sample_B_A        :  in std_logic_vector(31 downto 0);
+    sample_D_C        :  in std_logic_vector(31 downto 0);
+    sample_valid      :  in std_logic
+    );
+end component QUAD_streamer;
+
+
 signal sample_B_A    : std_logic_vector(31 downto 0);
 signal sample_D_C    : std_logic_vector(31 downto 0);
 signal ADC_SCLK_div  : std_logic_vector( 3 downto 0);
@@ -128,6 +168,7 @@ signal res           : std_logic;
 signal SCLK          : std_logic;
 signal DA            : std_logic_vector(3 downto 0);
 signal DB            : std_logic_vector(3 downto 0);
+
 
 attribute mark_debug : string;
 attribute mark_debug of SCLK: signal is "true";
@@ -178,6 +219,7 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
 	);
 
 	-- Add user logic here
+
   ADAQ23876_SPI_engine_inst: ADAQ23876_SPI_engine
     port map
       (
@@ -234,6 +276,26 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
       );
 
     end generate lvdsbuf_inst;
+
+
+  QUAD_streamer_inst : QUAD_streamer
+    port map
+      (
+      -- stream master
+      M_AXIS_ACLK	     => M_AXIS_ACLK,
+      M_AXIS_ARESETN	 => M_AXIS_ARESETN,
+      M_AXIS_TVALID	   => M_AXIS_TVALID,
+      M_AXIS_TDATA	   => M_AXIS_TDATA,
+      M_AXIS_TSTRB	   => M_AXIS_TSTRB,
+      M_AXIS_TKEEP	   => M_AXIS_TKEEP,
+      M_AXIS_TLAST 	   => M_AXIS_TLAST,
+      M_AXIS_TREADY	   => M_AXIS_TREADY,
+  
+      -- from SPI engine
+      sample_B_A        => sample_B_A,
+      sample_D_C        => sample_D_C,
+      sample_valid      => sample_valid
+      );
 
 
 	-- User logic ends

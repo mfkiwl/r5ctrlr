@@ -21,7 +21,7 @@ entity QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI is
     ADC_Tfirstclk     : out std_logic_vector( 4 downto 0);
     sample_B_A        :  in std_logic_vector(31 downto 0);
     sample_D_C        :  in std_logic_vector(31 downto 0);
-    sample_valid      :  in std_logic;                       -- not used here
+    sample_valid      :  in std_logic;
 
 		-- User ports ends
 		-- Do not modify the ports beyond this line
@@ -340,18 +340,20 @@ begin
 	            when Raddr =>		--At this state, slave is ready to receive address along with corresponding control signals                                          
 	                if (S_AXI_ARVALID = '1' and axi_arready = '1') then                                          
 	                  state_read <= Rdata;                                          
-	                  axi_rvalid <= '1';                                          
+	                  -- axi_rvalid <= '1';
+                    axi_rvalid <= sample_valid;  -- valerix
 	                  axi_arready <= '0';                                          
 	                  axi_araddr <= S_AXI_ARADDR;                                          
 	                else                                          
-	                  state_read <= state_read;                                          
+	                  state_read <= state_read;
 	                end if;                                          
 	            when Rdata =>		--At this state, slave is ready to send the data packets until the number of transfers is equal to burst length                                          
 	                if (axi_rvalid = '1' and S_AXI_RREADY = '1') then                                          
 	                  axi_rvalid <= '0';                                          
 	                  axi_arready <= '1';                                          
 	                  state_read <= Raddr;                                          
-	                else                                          
+	                else
+                    axi_rvalid <= sample_valid;  -- valerix
 	                  state_read <= state_read;                                          
 	                end if;                                          
 	            when others =>      --reserved                                          
