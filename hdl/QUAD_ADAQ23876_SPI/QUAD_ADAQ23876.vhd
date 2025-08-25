@@ -20,9 +20,9 @@ entity QUAD_ADAQ23876 is
     C_S00_AXI_ADDR_WIDTH	: integer	:= 5
   );
   port (
-    -- Ports of Axi Slave Bus Interface S00_AXI
-    s00_axi_aclk	: in std_logic;
-    s00_axi_aresetn	: in std_logic;
+    -- clock and reset are common to both AXI-lite and AXI-stream
+    axi_aclk	: in std_logic;
+    axi_aresetn	: in std_logic;
 
   -- Users to add ports here
     conv_strobe   :  in std_logic;
@@ -37,8 +37,6 @@ entity QUAD_ADAQ23876 is
     end_of_conv   : out std_logic;
   
     -- stream master
-    M_AXIS_ACLK	     : in std_logic;
-    M_AXIS_ARESETN	 : in std_logic;
     M_AXIS_TVALID	   : out std_logic;
     M_AXIS_TDATA	   : out std_logic_vector(C_M_AXIS_TDATA_WIDTH-1 downto 0);
     M_AXIS_TSTRB	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
@@ -182,7 +180,7 @@ attribute mark_debug of conv_strobe: signal is "true";
 
 begin
 
-  res <= not s00_axi_aresetn;
+  res <= not axi_aresetn;
   end_of_conv <= sample_valid;
 
 -- Instantiation of Axi Bus Interface S00_AXI
@@ -197,8 +195,8 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
     sample_B_A => sample_B_A,
     sample_D_C => sample_D_C,
     sample_valid => sample_valid,
-    S_AXI_ACLK	=> s00_axi_aclk,
-    S_AXI_ARESETN	=> s00_axi_aresetn,
+    S_AXI_ACLK	=> axi_aclk,
+    S_AXI_ARESETN	=> axi_aresetn,
     S_AXI_AWADDR	=> s00_axi_awaddr,
     S_AXI_AWPROT	=> s00_axi_awprot,
     S_AXI_AWVALID	=> s00_axi_awvalid,
@@ -226,7 +224,7 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
     port map
       (
       reset             => res,
-      clk               => s00_axi_aclk,
+      clk               => axi_aclk,
       -- conv clk is external
       convclk           => conv_strobe,
       ADC_SCLK_div      => ADC_SCLK_div,
@@ -284,8 +282,8 @@ QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI_inst : QUAD_ADAQ23876_slave_lite_v1_0_S00
     port map
       (
       -- stream master
-      M_AXIS_ACLK	     => M_AXIS_ACLK,
-      M_AXIS_ARESETN	 => M_AXIS_ARESETN,
+      M_AXIS_ACLK	     => axi_aclk,
+      M_AXIS_ARESETN	 => axi_aresetn,
       M_AXIS_TVALID	   => M_AXIS_TVALID,
       M_AXIS_TDATA	   => M_AXIS_TDATA,
       M_AXIS_TSTRB	   => M_AXIS_TSTRB,
