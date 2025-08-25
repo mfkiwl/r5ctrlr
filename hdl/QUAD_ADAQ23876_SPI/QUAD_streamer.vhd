@@ -5,19 +5,19 @@ use ieee.numeric_std.all;
 entity QUAD_streamer is
   generic
     (
-    C_M_AXIS_TDATA_WIDTH    : integer	:= 64
+    C_M_AXIS_TDATA_WIDTH    : integer := 64
     );
   port
     (
     -- stream master
-    M_AXIS_ACLK	     : in std_logic;
-    M_AXIS_ARESETN	 : in std_logic;
-    M_AXIS_TVALID	   : out std_logic;
-    M_AXIS_TDATA	   : out std_logic_vector(C_M_AXIS_TDATA_WIDTH-1 downto 0);
-    M_AXIS_TSTRB	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
-    M_AXIS_TKEEP	   : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
-    M_AXIS_TLAST 	   : out std_logic;
-    M_AXIS_TREADY	   : in std_logic;
+    M_AXIS_ACLK      : in std_logic;
+    M_AXIS_ARESETN   : in std_logic;
+    M_AXIS_TVALID    : out std_logic;
+    M_AXIS_TDATA     : out std_logic_vector(C_M_AXIS_TDATA_WIDTH-1 downto 0);
+    M_AXIS_TSTRB     : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
+    M_AXIS_TKEEP     : out std_logic_vector((C_M_AXIS_TDATA_WIDTH/8)-1 downto 0);
+    M_AXIS_TLAST     : out std_logic;
+    M_AXIS_TREADY    : in std_logic;
 
     -- from SPI engine
     sample_B_A        :  in std_logic_vector(31 downto 0);

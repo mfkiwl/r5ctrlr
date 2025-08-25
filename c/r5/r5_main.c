@@ -1956,10 +1956,10 @@ int SetupSystem(void **platformp)
     }
 
   // set a known initial pattern on the DAC outputs for debug purposes
-  status = WriteDacSamples(0,0x4000, 0xC000);
-  status = UpdateDacOutput(0);
-  status = WriteDacSamples(1,0xC000, 0x4000);
-  status = UpdateDacOutput(1);
+  // status = WriteDacSamples(0,0x4000, 0xC000);
+  // status = UpdateDacOutput(0);
+  // status = WriteDacSamples(1,0xC000, 0x4000);
+  // status = UpdateDacOutput(1);
 
   return XST_SUCCESS;
   }
