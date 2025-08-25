@@ -93,7 +93,7 @@ int InitAD3552(void)
     {
 
     // set CLK divider=2 and perform both HW and SW reset
-    *(DAC_BADDR[i]+DAC_CTRL_WORD) = SPI_CLK_NO_DIVIDER | DAC_HW_RESET | DAC_SOFT_RESET;
+    *(DAC_BADDR[i]+DAC_CTRL_WORD) = DAC_INPUT_REGISTER | SPI_CLK_NO_DIVIDER | DAC_HW_RESET | DAC_SOFT_RESET;
      
     usleep(RESET_WAIT);
      

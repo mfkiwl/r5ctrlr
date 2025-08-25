@@ -31,6 +31,8 @@ entity AD3552_SPI_slave_lite_v1_0_S00_AXI is
     DAC_wr_word       : out std_logic_vector(23 downto 0);
     DAC_rd_word       :  in std_logic_vector(23 downto 0);
     errcode           :  in std_logic_vector(3 downto 0);
+    -- to multiplexer
+    select_stream     : out std_logic;
 	
 		-- User ports ends
 		-- Do not modify the ports beyond this line
@@ -554,6 +556,7 @@ begin
 		DAC_SPI_CLK_div   <= slv_reg1(5 downto 2);
     DAC_soft_reset    <= slv_reg1(0);
     DAC_hw_resetn     <= not slv_reg1(1);
+    select_stream     <= slv_reg1(6);
 		DAC_RW            <= slv_reg2(30);
 		DAC_addr_data     <= slv_reg2(29);
 		DAC_LAST          <= slv_reg2(28);
