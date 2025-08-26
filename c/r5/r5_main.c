@@ -2213,6 +2213,9 @@ int main()
 
     if(gTimerIRQoccurred!=0)
       {
+      // check for overrun (it should NOT happen)
+      if(gTimerIRQoccurred>1)
+        LPRINTF("ERROR - timer IRQ overrun\n\r");
       // reset timer IRQ flag
       gTimerIRQoccurred=0;
 
