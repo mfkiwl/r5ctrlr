@@ -59,8 +59,17 @@ int InitMAX7301(void)
     {
     return XST_DEVICE_NOT_FOUND;
     }
+  
 
   status = XSpi_CfgInitialize(&MAX7301_SpiInstance, configPtr, configPtr->BaseAddress);
+  if(status == XST_DEVICE_IS_STARTED)
+    {
+    // this is not the first reset: the SPI intf must be stopped first
+    (void)XSpi_Stop(&MAX7301_SpiInstance);
+    // then we try to init again
+    status = XSpi_CfgInitialize(&MAX7301_SpiInstance, configPtr, configPtr->BaseAddress);
+    }
+
   if(status != XST_SUCCESS)
     {
     return XST_FAILURE;
