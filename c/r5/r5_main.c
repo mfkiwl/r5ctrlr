@@ -1320,6 +1320,7 @@ static int rpmsg_endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
     // reset
     case RPMSGCMD_RESET:
       InitVars();
+      Setup_Analog_Card();
       SetSamplingFreq((u32)gFsampl);
       break;
 
@@ -1849,6 +1850,54 @@ static struct remoteproc *SetupRpmsg(int proc_index, int rsc_index)
 
 // -----------------------------------------------------------
 
+void Setup_Analog_Card(void)
+  {
+  int status;
+
+  // setup analog card (ADI CN0585)
+  status = InitMAX7301();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in MAX7301 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("MAX7301 successfully initialized\r\n");
+    }
+
+  status = InitAD3552();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in AD3552 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("AD3552 successfully initialized\r\n");
+    }
+
+  status = InitADAQ23876();
+  if(status!=XST_SUCCESS)
+    {
+    LPRINTF("Error in ADAQ23876 initialization.\r\n");
+    return XST_FAILURE;
+    }
+  else
+    {
+    LPRINTF("ADAQ23876 successfully initialized\r\n");
+    }
+
+  // set a known initial pattern on the DAC outputs for debug purposes
+  // status = WriteDacSamples(0,0x4000, 0xC000);
+  // status = UpdateDacOutput(0);
+  // status = WriteDacSamples(1,0xC000, 0x4000);
+  // status = UpdateDacOutput(1);
+  }
+
+
+// -----------------------------------------------------------
+
 int SetupSystem(void **platformp)
   {
   int status;
@@ -1922,44 +1971,7 @@ int SetupSystem(void **platformp)
     }
 
   // setup analog card (ADI CN0585)
-  status = InitMAX7301();
-  if(status!=XST_SUCCESS)
-    {
-    LPRINTF("Error in MAX7301 initialization.\r\n");
-    return XST_FAILURE;
-    }
-  else
-    {
-    LPRINTF("MAX7301 successfully initialized\r\n");
-    }
-
-  status = InitAD3552();
-  if(status!=XST_SUCCESS)
-    {
-    LPRINTF("Error in AD3552 initialization.\r\n");
-    return XST_FAILURE;
-    }
-  else
-    {
-    LPRINTF("AD3552 successfully initialized\r\n");
-    }
-
-  status = InitADAQ23876();
-  if(status!=XST_SUCCESS)
-    {
-    LPRINTF("Error in ADAQ23876 initialization.\r\n");
-    return XST_FAILURE;
-    }
-  else
-    {
-    LPRINTF("ADAQ23876 successfully initialized\r\n");
-    }
-
-  // set a known initial pattern on the DAC outputs for debug purposes
-  status = WriteDacSamples(0,0x4000, 0xC000);
-  status = UpdateDacOutput(0);
-  status = WriteDacSamples(1,0xC000, 0x4000);
-  status = UpdateDacOutput(1);
+  Setup_Analog_Card();
 
   return XST_SUCCESS;
   }
@@ -2201,6 +2213,9 @@ int main()
 
     if(gTimerIRQoccurred!=0)
       {
+      // check for overrun (it should NOT happen)
+      if(gTimerIRQoccurred>1)
+        LPRINTF("ERROR - timer IRQ overrun\n\r");
       // reset timer IRQ flag
       gTimerIRQoccurred=0;
 

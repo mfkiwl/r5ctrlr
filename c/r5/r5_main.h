@@ -113,6 +113,7 @@ void SetSamplingFreq(u32 f);
 int SetupAXItimer(void);
 int SetupIRQs(void);
 int CleanupIRQs(void);
+void Setup_Analog_Card(void);
 int SetupSystem(void **platformp);
 int CleanupSystem(void *platform);
 void SetupExceptions(void);
