@@ -14,7 +14,7 @@ entity AD3552_CMD_interpreter is
     (
     reset             :  in std_logic;
     clk               :  in std_logic;
-    -- lines to the register bank
+    -- lines to the register bank / streamer
     start_transaction :  in std_logic;
     busy              : out std_logic;
     DAC_SPI_CLK_div   :  in std_logic_vector(3 downto 0);

@@ -21,7 +21,7 @@ entity QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI is
     ADC_Tfirstclk     : out std_logic_vector( 4 downto 0);
     sample_B_A        :  in std_logic_vector(31 downto 0);
     sample_D_C        :  in std_logic_vector(31 downto 0);
-    sample_valid      :  in std_logic;                       -- not used here
+    sample_valid      :  in std_logic;
 
 		-- User ports ends
 		-- Do not modify the ports beyond this line
@@ -112,6 +112,9 @@ architecture arch_imp of QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI is
 	------------------------------------------------
 	---- Signals for user logic register space example
 	--------------------------------------------------
+  
+  signal old_sample_valid: std_logic;
+
 	---- Number of Slave Registers 8
 	signal slv_reg0	:std_logic_vector(C_S_AXI_DATA_WIDTH-1 downto 0);
 	signal slv_reg1	:std_logic_vector(C_S_AXI_DATA_WIDTH-1 downto 0);
@@ -123,7 +126,7 @@ architecture arch_imp of QUAD_ADAQ23876_slave_lite_v1_0_S00_AXI is
 	signal slv_reg7	:std_logic_vector(C_S_AXI_DATA_WIDTH-1 downto 0);
 	signal byte_index	: integer;
 
-	 signal mem_logic  : std_logic_vector(ADDR_LSB + OPT_MEM_ADDR_BITS downto ADDR_LSB);
+  signal mem_logic  : std_logic_vector(ADDR_LSB + OPT_MEM_ADDR_BITS downto ADDR_LSB);
 
 	 --State machine local parameters
 	constant Idle : std_logic_vector(1 downto 0) := "00";
@@ -144,14 +147,14 @@ begin
 	S_AXI_ARREADY	<= axi_arready;
 	S_AXI_RRESP	<= axi_rresp;
 	S_AXI_RVALID	<= axi_rvalid;
-	    mem_logic     <= S_AXI_AWADDR(ADDR_LSB + OPT_MEM_ADDR_BITS downto ADDR_LSB) when (S_AXI_AWVALID = '1') else axi_awaddr(ADDR_LSB + OPT_MEM_ADDR_BITS downto ADDR_LSB);
+	mem_logic     <= S_AXI_AWADDR(ADDR_LSB + OPT_MEM_ADDR_BITS downto ADDR_LSB) when (S_AXI_AWVALID = '1') else axi_awaddr(ADDR_LSB + OPT_MEM_ADDR_BITS downto ADDR_LSB);
 
 	-- Implement Write state machine
 	-- Outstanding write transactions are not supported by the slave i.e., master should assert bready to receive response on or before it starts sending the new transaction
-	 process (S_AXI_ACLK)                                       
+	 process (S_AXI_ACLK)
 	   begin                                       
 	     if rising_edge(S_AXI_ACLK) then                                       
-	        if S_AXI_ARESETN = '0' then                                       
+	        if S_AXI_ARESETN = '0' then
 	          --asserting initial values to all 0's during reset                                       
 	          axi_awready <= '0';                                       
 	          axi_wready <= '0';                                       
@@ -217,7 +220,7 @@ begin
 
 	process (S_AXI_ACLK)
 	begin
-	  if rising_edge(S_AXI_ACLK) then 
+	  if rising_edge(S_AXI_ACLK) then
 	    if S_AXI_ARESETN = '0' then
 	      slv_reg0 <= (others => '0');
         -- valerix: sensible defaults for control register
@@ -225,8 +228,9 @@ begin
         slv_reg1( 8 downto 4) <= "01001";          -- Tfirstclk in 8ns units
         slv_reg1( 3 downto 0) <= "0000";           -- SCLK divider -1
 
-	      slv_reg2 <= (others => '0');
-	      slv_reg3 <= (others => '0');
+        -- slave register 2 and 3 contain ADC samples; they are managed in another process
+	      -- slv_reg2 <= (others => '0');
+	      -- slv_reg3 <= (others => '0');
 	      slv_reg4 <= (others => '0');
 	      slv_reg5 <= (others => '0');
 	      slv_reg6 <= (others => '0');
@@ -307,8 +311,10 @@ begin
 	          when others =>
 	            slv_reg0 <= slv_reg0;
 	            slv_reg1 <= slv_reg1;
-	            slv_reg2 <= slv_reg2;
-	            slv_reg3 <= slv_reg3;
+              -- valerix
+              -- slave register 2 and 3 contain ADC samples; they are managed in another process
+	            -- slv_reg2 <= slv_reg2;
+	            -- slv_reg3 <= slv_reg3;
 	            slv_reg4 <= slv_reg4;
 	            slv_reg5 <= slv_reg5;
 	            slv_reg6 <= slv_reg6;
@@ -340,18 +346,18 @@ begin
 	            when Raddr =>		--At this state, slave is ready to receive address along with corresponding control signals                                          
 	                if (S_AXI_ARVALID = '1' and axi_arready = '1') then                                          
 	                  state_read <= Rdata;                                          
-	                  axi_rvalid <= '1';                                          
+	                  axi_rvalid <= '1';
 	                  axi_arready <= '0';                                          
 	                  axi_araddr <= S_AXI_ARADDR;                                          
 	                else                                          
-	                  state_read <= state_read;                                          
+	                  state_read <= state_read;
 	                end if;                                          
 	            when Rdata =>		--At this state, slave is ready to send the data packets until the number of transfers is equal to burst length                                          
 	                if (axi_rvalid = '1' and S_AXI_RREADY = '1') then                                          
 	                  axi_rvalid <= '0';                                          
 	                  axi_arready <= '1';                                          
 	                  state_read <= Raddr;                                          
-	                else                                          
+	                else
 	                  state_read <= state_read;                                          
 	                end if;                                          
 	            when others =>      --reserved                                          
@@ -362,20 +368,39 @@ begin
 	       end if;                                                   
 	  end process;                                          
 	-- Implement memory mapped register select and read logic generation
-	 S_AXI_RDATA <= slv_reg0 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "000" ) else 
-	 slv_reg1 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "001" ) else 
-   -- valerix
-	 sample_B_A when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "010" ) else 
-   -- valerix
-	 sample_D_C when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "011" ) else 
-	 slv_reg4 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "100" ) else 
-	 slv_reg5 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "101" ) else 
-	 slv_reg6 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "110" ) else 
-	 slv_reg7 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "111" ) else 
-	 (others => '0');
+  S_AXI_RDATA <= slv_reg0 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "000" ) else 
+    slv_reg1 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "001" ) else 
+    slv_reg2 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "010" ) else 
+    slv_reg3 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "011" ) else 
+    slv_reg4 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "100" ) else 
+    slv_reg5 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "101" ) else 
+    slv_reg6 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "110" ) else 
+    slv_reg7 when (axi_araddr(ADDR_LSB+OPT_MEM_ADDR_BITS downto ADDR_LSB) = "111" ) else 
+    (others => '0');
 
 	-- Add user logic here
-  
+  -- valerix: update internal registers when conversion is ready
+  sampleupdate: process(S_AXI_ACLK)
+    begin
+      if rising_edge(S_AXI_ACLK) then
+        if(S_AXI_ARESETN = '0') then
+          old_sample_valid <= '1';
+          slv_reg2 <= (others => '0');
+  	      slv_reg3 <= (others => '0');
+        else
+          old_sample_valid <= sample_valid;
+          if((sample_valid='1')and(old_sample_valid='0')) then
+            -- sample_valid rising edge -> update internal slave registers with new samples
+            slv_reg2 <= sample_B_A;
+            slv_reg3 <= sample_D_C;
+          else
+            slv_reg2 <= slv_reg2;
+            slv_reg3 <= slv_reg3;
+          end if;    -- if sample update
+        end if;    -- if not reset
+      end if;    -- clk rising edge
+    end process sampleupdate;
+
   -- valerix: assign outputs from WRITE registers
   ADC_SCLK_div  <= slv_reg1(3 downto 0);
   ADC_Tfirstclk <= slv_reg1(8 downto 4);

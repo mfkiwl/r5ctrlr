@@ -8,7 +8,8 @@ use UNISIM.VComponents.all;
 entity AD3552_SPI is
 	generic (
 		-- Users to add parameters here
-
+    -- streaming slave width
+    C_S_AXIS_TDATA_WIDTH    : integer := 32;
 		-- User parameters ends
 		-- Do not modify the parameters beyond this line
 
@@ -25,13 +26,21 @@ entity AD3552_SPI is
     DAC_HW_RESETn     : out std_logic;
     SPI_SDIO          : inout std_logic_vector(3 downto 0);
 
+    -- stream slave
+    S_AXIS_TVALID     :  in std_logic;
+    S_AXIS_TDATA      :  in std_logic_vector(C_S_AXIS_TDATA_WIDTH-1 downto 0);
+    S_AXIS_TSTRB      :  in std_logic_vector((C_S_AXIS_TDATA_WIDTH/8)-1 downto 0);
+    S_AXIS_TKEEP      :  in std_logic_vector((C_S_AXIS_TDATA_WIDTH/8)-1 downto 0);
+    S_AXIS_TLAST      :  in std_logic;
+    S_AXIS_TREADY     : out std_logic;
+
 		-- User ports ends
 		-- Do not modify the ports beyond this line
 
 
 		-- Ports of Axi Slave Bus Interface S00_AXI
-		s00_axi_aclk	: in std_logic;
-		s00_axi_aresetn	: in std_logic;
+		axi_aclk	: in std_logic;
+		axi_aresetn	: in std_logic;
 		s00_axi_awaddr	: in std_logic_vector(C_S00_AXI_ADDR_WIDTH-1 downto 0);
 		s00_axi_awprot	: in std_logic_vector(2 downto 0);
 		s00_axi_awvalid	: in std_logic;
@@ -76,7 +85,9 @@ architecture arch_imp of AD3552_SPI is
 		DAC_wr_word       : out std_logic_vector(23 downto 0);
 		DAC_rd_word       :  in std_logic_vector(23 downto 0);
 		errcode           :  in std_logic_vector(3 downto 0);
-        -------------------------------
+    -- to multiplexer
+    select_stream     : out std_logic;
+    -------------------------------
 		S_AXI_ACLK	: in std_logic;
 		S_AXI_ARESETN	: in std_logic;
 		S_AXI_AWADDR	: in std_logic_vector(C_S_AXI_ADDR_WIDTH-1 downto 0);
@@ -100,6 +111,34 @@ architecture arch_imp of AD3552_SPI is
 		S_AXI_RREADY	: in std_logic
 		);
 	end component AD3552_SPI_slave_lite_v1_0_S00_AXI;
+
+  component dual_streamer is
+    generic
+      (
+      C_S_AXIS_TDATA_WIDTH    : integer := 32
+      );
+    port
+      (
+      -- stream slave
+      S_AXIS_ACLK       :  in std_logic;
+      S_AXIS_ARESETN    :  in std_logic;
+      S_AXIS_TVALID     :  in std_logic;
+      S_AXIS_TDATA      :  in std_logic_vector(C_S_AXIS_TDATA_WIDTH-1 downto 0);
+      S_AXIS_TSTRB      :  in std_logic_vector((C_S_AXIS_TDATA_WIDTH/8)-1 downto 0);
+      S_AXIS_TKEEP      :  in std_logic_vector((C_S_AXIS_TDATA_WIDTH/8)-1 downto 0);
+      S_AXIS_TLAST      :  in std_logic;
+      S_AXIS_TREADY     : out std_logic;
+  
+      -- to CMD interpreter
+      start_transaction : out std_logic;
+      busy              :  in std_logic;
+      DAC_RW            : out std_logic;
+      DAC_addr_data     : out std_logic;
+      DAC_LAST          : out std_logic;
+      DAC_bytenum       : out std_logic_vector(1 downto 0);
+      DAC_wr_word       : out std_logic_vector(23 downto 0)
+      );
+  end component dual_streamer;
 
 	component AD3552_CMD_interpreter is
 		port
@@ -153,35 +192,48 @@ architecture arch_imp of AD3552_SPI is
 		  );
 	end component AD3552_SPI_engine;
 
-signal DAC_CMD_reset     : std_logic;
-signal DAC_soft_reset     : std_logic;
-signal start_transaction : std_logic;
-signal busy              : std_logic;
-signal DAC_SPI_CLK_div   : std_logic_vector(3 downto 0);
-signal DAC_RW            : std_logic;
-signal DAC_addr_data     : std_logic;
-signal DAC_LAST          : std_logic;
-signal DAC_bytenum       : std_logic_vector(1 downto 0);
-signal DAC_wr_word       : std_logic_vector(23 downto 0);
-signal DAC_rd_word       : std_logic_vector(23 downto 0);
-signal errcode           : std_logic_vector(3 downto 0);
-signal SPI_reset         : std_logic;
-signal SPI_CE            : std_logic;
-signal SPI_wbyte         : std_logic_vector(7 downto 0);
-signal SPI_rbyte         : std_logic_vector(7 downto 0);
-signal SPI_RW            : std_logic;
-signal SPI_nextRW        : std_logic;
-signal SPI_start         : std_logic;
-signal SPI_busy          : std_logic;
-signal SDIO_i            : std_logic_vector(3 downto 0);
-signal SDIO_o            : std_logic_vector(3 downto 0);
-signal SDIO_t            : std_logic_vector(3 downto 0);
+signal DAC_CMD_reset            : std_logic;
+signal DAC_soft_reset           : std_logic;
+signal reg_start_transaction    : std_logic;
+signal stream_start_transaction : std_logic;
+signal mux_start_transaction    : std_logic;
+signal busy                     : std_logic;
+signal DAC_SPI_CLK_div          : std_logic_vector(3 downto 0);
+signal reg_DAC_RW               : std_logic;
+signal stream_DAC_RW            : std_logic;
+signal mux_DAC_RW               : std_logic;
+signal reg_DAC_addr_data        : std_logic;
+signal stream_DAC_addr_data     : std_logic;
+signal mux_DAC_addr_data        : std_logic;
+signal reg_DAC_LAST             : std_logic;
+signal stream_DAC_LAST          : std_logic;
+signal mux_DAC_LAST             : std_logic;
+signal reg_DAC_bytenum          : std_logic_vector(1 downto 0);
+signal stream_DAC_bytenum       : std_logic_vector(1 downto 0);
+signal mux_DAC_bytenum          : std_logic_vector(1 downto 0);
+signal reg_DAC_wr_word          : std_logic_vector(23 downto 0);
+signal stream_DAC_wr_word       : std_logic_vector(23 downto 0);
+signal mux_DAC_wr_word          : std_logic_vector(23 downto 0);
+signal DAC_rd_word              : std_logic_vector(23 downto 0);
+signal errcode                  : std_logic_vector(3 downto 0);
+signal select_stream            : std_logic;
+signal SPI_reset                : std_logic;
+signal SPI_CE                   : std_logic;
+signal SPI_wbyte                : std_logic_vector(7 downto 0);
+signal SPI_rbyte                : std_logic_vector(7 downto 0);
+signal SPI_RW                   : std_logic;
+signal SPI_nextRW               : std_logic;
+signal SPI_start                : std_logic;
+signal SPI_busy                 : std_logic;
+signal SDIO_i                   : std_logic_vector(3 downto 0);
+signal SDIO_o                   : std_logic_vector(3 downto 0);
+signal SDIO_t                   : std_logic_vector(3 downto 0);
 
 attribute mark_debug : string;
-attribute mark_debug of start_transaction: signal is "true";
+attribute mark_debug of mux_start_transaction: signal is "true";
 attribute mark_debug of busy: signal is "true";
-attribute mark_debug of DAC_bytenum: signal is "true";
-attribute mark_debug of DAC_wr_word: signal is "true";
+attribute mark_debug of mux_DAC_bytenum: signal is "true";
+attribute mark_debug of mux_DAC_wr_word: signal is "true";
 attribute mark_debug of DAC_rd_word: signal is "true";
 attribute mark_debug of errcode: signal is "true";
 attribute mark_debug of SPI_CE: signal is "true";
@@ -199,7 +251,7 @@ attribute mark_debug of XLATOR_DIR: signal is "true";
 
 begin
 
-	DAC_CMD_reset <= not s00_axi_aresetn or DAC_soft_reset;
+	DAC_CMD_reset <= not axi_aresetn or DAC_soft_reset;
 
 -- Instantiation of Axi Bus Interface S00_AXI
 AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
@@ -209,21 +261,24 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
 	)
 	port map (
 		-- lines to command interpreter
-		start_transaction => start_transaction,
+		start_transaction => reg_start_transaction,
 		busy              => busy,
     DAC_soft_reset    => DAC_soft_reset,
     DAC_hw_resetn     => DAC_HW_RESETn,
 		DAC_SPI_CLK_div   => DAC_SPI_CLK_div,
-		DAC_RW            => DAC_RW,
-		DAC_addr_data     => DAC_addr_data,
-		DAC_LAST          => DAC_LAST,
-		DAC_bytenum       => DAC_bytenum,
-		DAC_wr_word       => DAC_wr_word,
+		DAC_RW            => reg_DAC_RW,
+		DAC_addr_data     => reg_DAC_addr_data,
+		DAC_LAST          => reg_DAC_LAST,
+		DAC_bytenum       => reg_DAC_bytenum,
+		DAC_wr_word       => reg_DAC_wr_word,
 		DAC_rd_word       => DAC_rd_word,
 		errcode           => errcode,
+    -- to multiplexer
+    select_stream     => select_stream,
+
 		-------------------------------
-		S_AXI_ACLK	=> s00_axi_aclk,
-		S_AXI_ARESETN	=> s00_axi_aresetn,
+		S_AXI_ACLK	=> axi_aclk,
+		S_AXI_ARESETN	=> axi_aresetn,
 		S_AXI_AWADDR	=> s00_axi_awaddr,
 		S_AXI_AWPROT	=> s00_axi_awprot,
 		S_AXI_AWVALID	=> s00_axi_awvalid,
@@ -247,71 +302,107 @@ AD3552_SPI_slave_lite_v1_0_S00_AXI_inst : AD3552_SPI_slave_lite_v1_0_S00_AXI
 
 	-- Add user logic here
 
-    -- instantiation of command interpreter
-    AD3552_CMD_interpreter_i : AD3552_CMD_interpreter
-      port map
-        (
-        reset             => DAC_CMD_reset,
-        clk               => s00_axi_aclk,
-        -- lines to the register bank
-        start_transaction => start_transaction,
-        busy              => busy,
-        DAC_SPI_CLK_div   => DAC_SPI_CLK_div,
-        DAC_RW            => DAC_RW,
-        DAC_addr_data     => DAC_addr_data,
-        DAC_LAST          => DAC_LAST,
-        DAC_bytenum       => DAC_bytenum,
-        DAC_wr_word       => DAC_wr_word,
-        DAC_rd_word       => DAC_rd_word,
-        errcode           => errcode,
-        -- lines to the SPI engine
-        SPI_reset         => SPI_reset,
-        SPI_CE            => SPI_CE,
-        SPI_wbyte         => SPI_wbyte,
-        SPI_rbyte         => SPI_rbyte,
-        SPI_RW            => SPI_RW,
-        SPI_nextRW        => SPI_nextRW,
-        SPI_start         => SPI_start,
-        SPI_busy          => SPI_busy,
-        -- output lines
-        SPI_CSn           => SPI_CSn
-        );
+-- instantiation of streamer
+dual_streamer_inst : dual_streamer
+  generic map
+    (
+    C_S_AXIS_TDATA_WIDTH => C_S_AXIS_TDATA_WIDTH
+    )
+  port map
+    (
+    -- stream slave
+    S_AXIS_ACLK       => axi_aclk,
+    S_AXIS_ARESETN    => axi_aresetn,
+    S_AXIS_TVALID     => S_AXIS_TVALID,
+    S_AXIS_TDATA      => S_AXIS_TDATA,
+    S_AXIS_TSTRB      => S_AXIS_TSTRB,
+    S_AXIS_TKEEP      => S_AXIS_TKEEP,
+    S_AXIS_TLAST      => S_AXIS_TLAST,
+    S_AXIS_TREADY     => S_AXIS_TREADY,
 
-    -- instantiation of SPI engine
-    AD3552_SPI_engine_i : AD3552_SPI_engine
-      port map
-        (
-        reset             => SPI_reset,
-        clk               => s00_axi_aclk,
-        ce                => SPI_CE,
-        -- lines to command interpreter
-        start_transaction => SPI_start,
-        busy              => SPI_busy,
-        wbyte             => SPI_wbyte,
-        rbyte             => SPI_rbyte,
-        RW                => SPI_RW,
-        nextRW            => SPI_nextRW,
-        -- lines to SPI
-        XLATOR_DIR        => XLATOR_DIR,
-        SCLK              => SPI_SCLK,
-        SDIO_i            => SDIO_i,
-        SDIO_o            => SDIO_o,
-        SDIO_t            => SDIO_t
-        );
+    -- to CMD interpreter
+    start_transaction => stream_start_transaction,
+    busy              => busy,
+    DAC_RW            => stream_DAC_RW,
+    DAC_addr_data     => stream_DAC_addr_data,
+    DAC_LAST          => stream_DAC_LAST,
+    DAC_bytenum       => stream_DAC_bytenum,
+    DAC_wr_word       => stream_DAC_wr_word
+    );
 
-    -- instantiation of quadSPI IOBUF
-    -- note that assignment of I to SDIO_o and O to SDIO_i is correct;
-    -- see IOBUF doc, which is UG974
-    SPI_IOBUF_array_i : for i in 0 to 3 generate
-      IOBUF_i : IOBUF
-        port map
-          (
-          I  => SDIO_o(i),
-          O  => SDIO_i(i),
-          T  => SDIO_t(i),
-          IO => SPI_SDIO(i)
-          );
-    end generate SPI_IOBUF_array_i;
+-- MUX to drive the CMD intrpreter via AXIlite register or AXIstream input
+mux_start_transaction <= stream_start_transaction when (select_stream='1') else reg_start_transaction;
+mux_DAC_RW <= stream_DAC_RW when (select_stream='1') else reg_DAC_RW;
+mux_DAC_addr_data <= stream_DAC_addr_data when (select_stream='1') else reg_DAC_addr_data;
+mux_DAC_LAST <= stream_DAC_LAST when (select_stream='1') else reg_DAC_LAST;
+mux_DAC_bytenum <= stream_DAC_bytenum when (select_stream='1') else reg_DAC_bytenum;
+mux_DAC_wr_word <= stream_DAC_wr_word when (select_stream='1') else reg_DAC_wr_word;
+
+-- instantiation of command interpreter
+AD3552_CMD_interpreter_i : AD3552_CMD_interpreter
+  port map
+    (
+    reset             => DAC_CMD_reset,
+    clk               => axi_aclk,
+    -- lines to the register bank
+    start_transaction => mux_start_transaction,
+    busy              => busy,
+    DAC_SPI_CLK_div   => DAC_SPI_CLK_div,
+    DAC_RW            => mux_DAC_RW,
+    DAC_addr_data     => mux_DAC_addr_data,
+    DAC_LAST          => mux_DAC_LAST,
+    DAC_bytenum       => mux_DAC_bytenum,
+    DAC_wr_word       => mux_DAC_wr_word,
+    DAC_rd_word       => DAC_rd_word,
+    errcode           => errcode,
+    -- lines to the SPI engine
+    SPI_reset         => SPI_reset,
+    SPI_CE            => SPI_CE,
+    SPI_wbyte         => SPI_wbyte,
+    SPI_rbyte         => SPI_rbyte,
+    SPI_RW            => SPI_RW,
+    SPI_nextRW        => SPI_nextRW,
+    SPI_start         => SPI_start,
+    SPI_busy          => SPI_busy,
+    -- output lines
+    SPI_CSn           => SPI_CSn
+    );
+
+-- instantiation of SPI engine
+AD3552_SPI_engine_i : AD3552_SPI_engine
+  port map
+    (
+    reset             => SPI_reset,
+    clk               => axi_aclk,
+    ce                => SPI_CE,
+    -- lines to command interpreter
+    start_transaction => SPI_start,
+    busy              => SPI_busy,
+    wbyte             => SPI_wbyte,
+    rbyte             => SPI_rbyte,
+    RW                => SPI_RW,
+    nextRW            => SPI_nextRW,
+    -- lines to SPI
+    XLATOR_DIR        => XLATOR_DIR,
+    SCLK              => SPI_SCLK,
+    SDIO_i            => SDIO_i,
+    SDIO_o            => SDIO_o,
+    SDIO_t            => SDIO_t
+    );
+
+-- instantiation of quadSPI IOBUF
+-- note that assignment of I to SDIO_o and O to SDIO_i is correct;
+-- see IOBUF doc, which is UG974
+SPI_IOBUF_array_i : for i in 0 to 3 generate
+  IOBUF_i : IOBUF
+    port map
+      (
+      I  => SDIO_o(i),
+      O  => SDIO_i(i),
+      T  => SDIO_t(i),
+      IO => SPI_SDIO(i)
+      );
+end generate SPI_IOBUF_array_i;
     
 
     -- User logic ends

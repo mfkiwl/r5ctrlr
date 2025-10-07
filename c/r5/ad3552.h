@@ -50,6 +50,8 @@
 #define SPI_CLK_DIVIDE_BY_4     0x0000000C
 #define DAC_HW_RESET            0x00000002
 #define DAC_SOFT_RESET          0x00000001
+#define DAC_INPUT_STREAM        0x00000040
+#define DAC_INPUT_REGISTER      0x00000000
 
 // DAC TRANSACTION register constants
 #define DAC_TRANSACTION_ENDED_MASK   0x80000000
